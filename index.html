@@ -198,8 +198,14 @@
         return new Promise((res, rej) => { google.script.run.withSuccessHandler(res).withFailureHandler(rej)[action](payload); });
       }
 
-      const url = CONFIG.GAS_URL + (CONFIG.GAS_URL.includes('?') ? '&' : '?') + 'action=' + action + '&token=' + CONFIG.TOKEN;
-      console.log("🚀 Loteando acción:", action);
+      // Construcción robusta de URL
+      const params = new URLSearchParams({
+        action: action,
+        token: (CONFIG.TOKEN || "").trim()
+      });
+      const url = `${CONFIG.GAS_URL}${CONFIG.GAS_URL.includes('?') ? '&' : '?'}${params.toString()}`;
+
+      console.log("🚀 Llamando API:", action);
 
       try {
         const isGet = (action === 'getData');
@@ -213,15 +219,16 @@
         }
 
         const res = await fetch(isGet ? url : CONFIG.GAS_URL, options);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
         const data = await res.json();
         if (data.error) throw new Error(data.error);
         return data;
       } catch (e) {
         console.error("❌ Catch API:", e);
-        const isSecretMissing = CONFIG.GAS_URL.includes('REPLACE_WITH');
-        const msg = isSecretMissing
-          ? "⚠️ Configuración incompleta en GitHub (faltan Secrets)."
-          : "❌ No se pudo conectar con el inventario. Verificá que la Web App en Google esté publicada como 'Anyone' y que tu TOKEN sea correcto.";
+        const msg = e.message.includes('REPLACE_WITH')
+          ? "⚠️ Faltan Secrets en GitHub."
+          : `❌ Error: ${e.message}`;
         throw new Error(msg);
       }
     }
