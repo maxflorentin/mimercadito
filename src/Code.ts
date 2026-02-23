@@ -160,20 +160,11 @@ function getInventoryData(): InventoryData | string {
     const config = getSettings();
     const id = (config.SPREADSHEET_ID || "").trim();
 
-    if (!id || id.length < 10 || id.includes("PONER_ACA")) {
-      return "Error: SPREADSHEET_ID no configurado. Ejecutá setupSecrets con el ID real.";
+    if (!id || id.includes("PONER_ACA")) {
+      return "Error: SPREADSHEET_ID no configurado. Ejecutá setupSecrets.";
     }
 
-    if (id.length < 40) {
-      return `Error: El ID guardado tiene solo ${id.length} caracteres. Un ID normal tiene 44. Verificá que copiaste el ID completo entre /d/ y /edit de la URL.`;
-    }
-
-    let ss: GoogleAppsScript.Spreadsheet.Spreadsheet;
-    try {
-      ss = SpreadsheetApp.openById(id);
-    } catch (e) {
-      return "Error de Google Apps Script al abrir el archivo: " + String(e);
-    }
+    const ss = SpreadsheetApp.openById(id);
     const sheet = ss.getSheets()[0];
     const values = sheet.getDataRange().getValues();
 
