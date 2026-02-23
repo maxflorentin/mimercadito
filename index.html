@@ -323,7 +323,10 @@
 
     function shareWhatsApp(idx) {
       const i = items.find(it => it.idx == idx);
-      const msg = `🛒 *${i.name}*\n💰 $${i.listPrice.toLocaleString()}\n\n_¿Te interesa?_`;
+      let msg = `🛒 *${i.name}*\n💰 $${i.listPrice.toLocaleString()}\n\n_¿Te interesa?_`;
+      if (i.photoUrl && i.photoUrl.includes('drive.google.com')) {
+        msg += `\n\n📸 Ver foto:\n${i.photoUrl}`;
+      }
       window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
     }
 
