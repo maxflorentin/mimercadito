@@ -104,12 +104,13 @@
 
   <div class="page-narrow" id="view-formulario" style="display:none; margin-top: var(--sp-8);">
     <div style="margin-bottom:var(--sp-6);">
-      <h1 class="text-title">Nuevo producto</h1>
+      <h1 class="text-title" id="form-title">Nuevo producto</h1>
       <p class="text-secondary" style="font-size:var(--text-sm);margin-top:2px;">Cargá los datos del nuevo item.</p>
     </div>
 
     <div class="card">
       <form id="productForm" class="flex flex-col gap-4">
+        <input type="hidden" name="editingIdx" id="form-editing-idx" value="" />
         <div class="form-group">
           <label class="form-label">Nombre del producto</label>
           <input type="text" name="productName" class="form-control" placeholder="MacBook Pro, iPhone 15…" required />
@@ -190,7 +191,22 @@
       document.getElementById('view-formulario').style.display = (v === 'formulario' ? 'block' : 'none');
       document.getElementById('btn-nav-dashboard').classList.toggle('active', v === 'dashboard');
       document.getElementById('btn-nav-formulario').classList.toggle('active', v === 'formulario');
+
+      // Si entramos a 'Nuevo' de cero, reseteamos el form
+      if (v === 'formulario' && !document.getElementById('form-editing-idx').value) {
+        resetForm();
+      }
+
       if (v === 'dashboard') loadData();
+    }
+
+    function resetForm() {
+      const f = document.getElementById('productForm');
+      f.reset();
+      f.editingIdx.value = "";
+      document.getElementById('form-title').textContent = "Nuevo producto";
+      document.getElementById('submitBtn').textContent = "Guardar producto";
+      clearPhoto();
     }
 
     async function apiCall(action, payload = {}) {
@@ -272,14 +288,19 @@
       tbody.innerHTML = data.map(i => {
         const isS = i.status === 'Sold';
         const cost = i.costPrice > 0 ? '$' + i.costPrice.toLocaleString() : '—';
-        const price = isS ? `<span class="text-accent">$${(i.salePrice || 0).toLocaleString()}</span>` : `$${i.listPrice.toLocaleString()}`;
+        const price = isS
+          ? `<span class="text-accent">$${(i.salePrice || 0).toLocaleString()}</span>`
+          : `<div class="td-mono" style="line-height:1.2;">
+               <div>$${i.listPrice.toLocaleString()}</div>
+               <div class="text-tertiary" style="font-size:10px;">Piso: $${i.floorPrice.toLocaleString()}</div>
+             </div>`;
         const badge = isS ? `<span class="badge badge-success">Vendido</span>` : (i.status === 'Deleted' ? `<span class="badge badge-neutral">Archivado</span>` : `<span class="badge badge-warning">En venta</span>`);
 
         return `<tr>
                 <td class="td-name">${i.name}</td>
                 <td><span class="badge badge-neutral">${i.category}</span></td>
                 <td class="td-mono">${cost}</td>
-                <td class="td-mono">${price}</td>
+                <td>${price}</td>
                 <td>${i.costPrice ? '$' + ((isS ? i.salePrice : i.listPrice) - i.costPrice).toLocaleString() : '—'}</td>
                 <td>${daysCell(i)}</td>
                 <td>${badge}</td>
@@ -287,6 +308,9 @@
                     ${!isS ? `
                       <button class="action-btn wa" onclick="shareWhatsApp(${i.idx})" title="Compartir WhatsApp">
                         <svg width="16" height="16" fill="currentColor" viewBox="0 0 24 24"><path d="M12.012 2c-5.508 0-9.987 4.479-9.987 9.987 0 1.757.455 3.409 1.25 4.847l-1.327 4.84 4.954-1.301c1.411.769 3.014 1.213 4.717 1.213 5.503 0 9.981-4.478 9.981-9.986 0-5.508-4.478-9.987-9.988-9.987zm.006 18.254c-1.577 0-3.046-.419-4.316-1.149l-.309-.178-3.213.843.858-3.132-.196-.312c-.792-1.264-1.21-2.723-1.21-4.226 0-4.41 3.589-7.999 7.994-7.999 4.411 0 7.994 3.588 7.994 7.999 0 4.411-3.582 7.999-7.994 7.999h-.008z"/></svg>
+                      </button>
+                      <button class="action-btn sell" onclick="editProduct(${i.idx})" title="Editar Producto">
+                        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 113 3L12 15l-4 1 1-4 9.5-9.5z" /></svg>
                       </button>
                       <button class="action-btn sell" onclick="openSellModal(${i.idx})" title="Registrar Venta">
                         <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" /></svg>
@@ -351,6 +375,32 @@
       loadData();
     }
 
+    function editProduct(idx) {
+      const i = items.find(it => it.idx == idx);
+      const f = document.getElementById('productForm');
+
+      f.editingIdx.value = i.idx;
+      f.productName.value = i.name;
+      f.category.value = i.category;
+      f.condition.value = i.condition;
+      f.costPrice.value = i.costPrice || 0;
+      f.publicPrice.value = i.listPrice;
+      f.minPrice.value = i.floorPrice;
+      f.notes.value = i.notes || "";
+
+      document.getElementById('form-title').textContent = "Editar producto";
+      document.getElementById('submitBtn').textContent = "Actualizar producto";
+
+      if (i.photoUrl) {
+        document.getElementById('image-preview').src = i.photoUrl;
+        document.getElementById('image-preview-container').style.display = 'block';
+      } else {
+        clearPhoto();
+      }
+
+      showView('formulario');
+    }
+
     function openSellModal(idx) {
       const i = items.find(it => it.idx == idx);
       document.getElementById('modal-title').textContent = 'Venta: ' + i.name;
@@ -372,8 +422,25 @@
       st.innerHTML = '⏳ Guardando…';
       const file = document.getElementById('photo').files[0];
       const save = async (b64 = null) => {
-        await apiCall('processForm', { productName: f.productName.value, category: f.category.value, condition: f.condition.value, costPrice: f.costPrice.value, publicPrice: f.publicPrice.value, minPrice: f.minPrice.value, notes: f.notes.value, imageBlob: b64 });
-        f.reset(); clearPhoto(); st.innerHTML = '✅!'; setTimeout(() => showView('dashboard'), 1000);
+        const payload = {
+          productName: f.productName.value,
+          category: f.category.value,
+          condition: f.condition.value,
+          costPrice: f.costPrice.value,
+          publicPrice: f.publicPrice.value,
+          minPrice: f.minPrice.value,
+          notes: f.notes.value,
+          imageBlob: b64,
+          rowIndex: f.editingIdx.value
+        };
+
+        const action = f.editingIdx.value ? 'updateProduct' : 'processForm';
+        await apiCall(action, payload);
+
+        f.reset();
+        clearPhoto();
+        st.innerHTML = '✅!';
+        setTimeout(() => showView('dashboard'), 1000);
       };
       if (file) { const r = new FileReader(); r.onload = e => save(e.target.result); r.readAsDataURL(file); } else save();
     }
