@@ -194,22 +194,24 @@
     }
 
     async function apiCall(action, payload = {}) {
-      // Soporte nativo para cuando se usa dentro de GAS (opcional)
       if (typeof google !== 'undefined' && google.script && google.script.run) {
         return new Promise((res, rej) => { google.script.run.withSuccessHandler(res).withFailureHandler(rej)[action](payload); });
       }
 
-      if (typeof CONFIG === 'undefined') {
-        throw new Error("Configuración no encontrada. ¿Inyectaste las variables en GitHub?");
-      }
-
       const url = CONFIG.GAS_URL + (CONFIG.GAS_URL.includes('?') ? '&' : '?') + 'action=' + action + '&token=' + CONFIG.TOKEN;
+
+      // Usamos GET para getData (más estable) y POST para el resto
+      const isGet = (action === 'getData');
       const options = {
-        method: 'POST',
-        body: JSON.stringify({ ...payload, action, token: CONFIG.TOKEN })
+        method: isGet ? 'GET' : 'POST',
+        redirect: 'follow'
       };
 
-      const res = await fetch(url, options);
+      if (!isGet) {
+        options.body = JSON.stringify({ ...payload, action, token: CONFIG.TOKEN });
+      }
+
+      const res = await fetch(isGet ? url : CONFIG.GAS_URL, options);
       const data = await res.json();
       if (data.error) throw new Error(data.error);
       return data;
