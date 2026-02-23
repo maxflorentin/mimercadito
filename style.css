@@ -649,18 +649,17 @@ body {
 .toolbar {
   display: flex;
   align-items: center;
-  gap: var(--sp-3);
+  gap: var(--sp-2);
   flex-direction: row !important;
   flex-wrap: nowrap !important;
-  padding: var(--sp-2) 0;
-  flex: 1;
   justify-content: flex-end;
+  width: 100%;
 }
 
 .search-wrap {
   position: relative;
   flex: 1;
-  max-width: 320px;
+  max-width: 400px;
   min-width: 140px;
 }
 
