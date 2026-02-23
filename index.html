@@ -149,7 +149,17 @@
               onchange="previewImage(this)" />
           </label>
           <div id="image-preview-container" style="display:none;margin-top:var(--sp-2);position:relative;">
-            <img id="image-preview" src="" style="width:100%;border-radius:var(--r-md);" />
+            <img id="image-preview" src="" style="width:100%;border-radius:var(--r-md);display:none;" />
+            <div id="image-link-container"
+              style="display:none; padding: 16px; background: var(--color-bg); border-radius: var(--r-md); text-align: center; border: 1px solid var(--color-border);">
+              <a id="image-direct-link" href="#" target="_blank"
+                style="color: var(--color-accent); text-decoration: none; font-weight: 500; font-size: var(--text-sm); display: flex; align-items: center; justify-content: center; gap: 8px;">
+                <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                  <path d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                </svg>
+                Ver foto actual
+              </a>
+            </div>
             <button type="button" onclick="clearPhoto()"
               style="position:absolute;top:8px;right:8px;background:rgba(0,0,0,0.5);color:white;border:none;border-radius:50%;width:24px;height:24px;">✕</button>
           </div>
@@ -391,9 +401,11 @@
       document.getElementById('form-title').textContent = "Editar producto";
       document.getElementById('submitBtn').textContent = "Actualizar producto";
 
-      if (i.photoUrl) {
-        document.getElementById('image-preview').src = i.photoUrl;
+      if (i.photoUrl && i.photoUrl.includes('http')) {
         document.getElementById('image-preview-container').style.display = 'block';
+        document.getElementById('image-preview').style.display = 'none';
+        document.getElementById('image-link-container').style.display = 'block';
+        document.getElementById('image-direct-link').href = i.photoUrl;
       } else {
         clearPhoto();
       }
@@ -414,8 +426,24 @@
       await apiCall('markSold', { rowIndex: idx, salePrice: p });
       loadData();
     }
-    function previewImage(i) { if (i.files[0]) { const r = new FileReader(); r.onload = e => { document.getElementById('image-preview').src = e.target.result; document.getElementById('image-preview-container').style.display = 'block'; }; r.readAsDataURL(i.files[0]); } }
-    function clearPhoto() { document.getElementById('photo').value = ''; document.getElementById('image-preview-container').style.display = 'none'; }
+    function previewImage(i) {
+      if (i.files[0]) {
+        const r = new FileReader();
+        r.onload = e => {
+          document.getElementById('image-preview').src = e.target.result;
+          document.getElementById('image-preview').style.display = 'block';
+          document.getElementById('image-link-container').style.display = 'none';
+          document.getElementById('image-preview-container').style.display = 'block';
+        };
+        r.readAsDataURL(i.files[0]);
+      }
+    }
+    function clearPhoto() {
+      document.getElementById('photo').value = '';
+      document.getElementById('image-preview-container').style.display = 'none';
+      document.getElementById('image-preview').style.display = 'none';
+      document.getElementById('image-link-container').style.display = 'none';
+    }
     async function startUpload() {
       const f = document.getElementById('productForm');
       const st = document.getElementById('status');
