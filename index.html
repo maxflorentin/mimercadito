@@ -32,7 +32,7 @@
   <div class="page" id="view-dashboard">
     <div class="stat-grid" style="margin-bottom:var(--sp-5);">
       <div class="stat-card">
-        <p class="stat-label">En venta</p>
+        <p class="stat-label">Disponible</p>
         <p class="stat-value" id="stat-pending">—</p>
       </div>
       <div class="stat-card">
@@ -69,7 +69,7 @@
           <div class="filter-wrap">
             <select class="filter-select" onchange="applyFilters()" id="filter-status">
               <option value="">Todos</option>
-              <option value="Pending">En venta</option>
+              <option value="Pending">Disponible</option>
               <option value="Sold">Vendidos</option>
               <option value="Deleted">Archivados</option>
             </select>
@@ -304,7 +304,7 @@
                <div>$${i.listPrice.toLocaleString()}</div>
                <div class="text-tertiary" style="font-size:10px;">Piso: $${i.floorPrice.toLocaleString()}</div>
              </div>`;
-        const badge = isS ? `<span class="badge badge-success">Vendido</span>` : (i.status === 'Deleted' ? `<span class="badge badge-neutral">Archivado</span>` : `<span class="badge badge-warning">En venta</span>`);
+        const badge = isS ? `<span class="badge badge-success">Vendido</span>` : (i.status === 'Deleted' ? `<span class="badge badge-neutral">Archivado</span>` : `<span class="badge badge-warning">Disponible</span>`);
 
         return `<tr>
                 <td class="td-name">${i.name}</td>
