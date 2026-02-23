@@ -172,10 +172,16 @@
   </div>
   <div class="toast-stack" id="toast-stack"></div>
 
-  <!-- Script de Configuración (será generado/inyectado por GH Actions) -->
-  <script src="config.js"></script>
-
   <script>
+    /**
+     * CONFIGURACIÓN UNIVERSAL
+     * GitHub Actions reemplazará estos valores durante el deploy.
+     */
+    const CONFIG = {
+      GAS_URL: '',
+      TOKEN: 'dk3H1YjOJMGfEcAv4TtyTaDBXEZs6oKky5wau3FGRHjTYzQ7Emg6CSHI2aJjR4Hj'
+    };
+
     const COL = { DATE: 0, NAME: 1, CAT: 2, COND: 3, COST: 4, LIST: 5, FLOOR: 6, NOTES: 7, PHOTO: 8, STATUS: 9, SALE_PRICE: 10, SALE_DATE: 11 };
     let items = [];
 
