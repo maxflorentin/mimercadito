@@ -205,7 +205,7 @@
       });
       const url = `${CONFIG.GAS_URL}${CONFIG.GAS_URL.includes('?') ? '&' : '?'}${params.toString()}`;
 
-      console.log("🚀 Llamando API:", action);
+      console.log("🚀 Llamando API:", action, " a URL:", url.substring(0, 50) + "...");
 
       try {
         const isGet = (action === 'getData');
@@ -225,11 +225,15 @@
         if (data.error) throw new Error(data.error);
         return data;
       } catch (e) {
-        console.error("❌ Catch API:", e);
-        const msg = e.message.includes('REPLACE_WITH')
-          ? "⚠️ Faltan Secrets en GitHub."
-          : `❌ Error: ${e.message}`;
-        throw new Error(msg);
+        console.error("❌ Catch API Detailed:", e);
+        if (e.message.includes('REPLACE_WITH')) {
+          throw new Error("⚠️ Faltan Secrets en GitHub (REPLACE_WITH detectado).");
+        }
+        // Si es un error de fetch puro (CORS o red)
+        if (e.message.includes('fetch')) {
+          throw new Error("❌ No se pudo conectar con Google. Verificá: 1) Que la URL en GitHub sea la correcta, 2) Que la Web App esté publicada para 'Anyone'.");
+        }
+        throw new Error(`❌ Error: ${e.message}`);
       }
     }
 
