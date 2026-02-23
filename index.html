@@ -220,6 +220,12 @@
         return data;
       } catch (e) {
         console.error("❌ API Error:", e);
+        if (CONFIG.GAS_URL.includes('REPLACE_WITH')) {
+          throw new Error("⚠️ Todavía se están configurando los Secrets en GitHub. Esperá un minuto.");
+        }
+        if (e.message.includes('fetch')) {
+          throw new Error("❌ Error de conexión. Verificá que la Web App en Google esté publicada para 'Cualquier persona' (Anyone).");
+        }
         throw e;
       }
     }
