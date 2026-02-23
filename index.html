@@ -228,6 +228,18 @@
       const tbody = document.getElementById('tableBody');
       try {
         const data = await apiCall('getData');
+
+        // Si el backend devolvió un error como string
+        if (typeof data === 'string' && data.startsWith('Error')) {
+          throw new Error(data);
+        }
+
+        // Validar que tengamos un array
+        if (!Array.isArray(data)) {
+          console.error("Unexpected data format:", data);
+          throw new Error("Formato de datos inválido. Revisar configuración.");
+        }
+
         items = data.map((row, idx) => ({
           idx: idx + 2, date: row[COL.DATE], name: row[COL.NAME], category: row[COL.CAT],
           condition: parseInt(row[COL.COND]), costPrice: parseFloat(row[COL.COST]) || 0,
