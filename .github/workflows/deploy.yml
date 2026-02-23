@@ -10,12 +10,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Create config.js from Secrets
+      - name: Inject Secrets into index.html
         run: |
-          echo "const CONFIG = {" > config.js
-          echo "  GAS_URL: '${{ secrets.GAS_URL }}'," >> config.js
-          echo "  TOKEN: '${{ secrets.API_TOKEN }}'" >> config.js
-          echo "};" >> config.js
+          sed -i "s|REPLACE_WITH_GAS_URL|${{ secrets.GAS_URL }}|g" index.html
+          sed -i "s|REPLACE_WITH_API_TOKEN|${{ secrets.API_TOKEN }}|g" index.html
 
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v3
