@@ -198,14 +198,10 @@
         return new Promise((res, rej) => { google.script.run.withSuccessHandler(res).withFailureHandler(rej)[action](payload); });
       }
 
-      // Construcción robusta de URL
-      const params = new URLSearchParams({
-        action: action,
-        token: (CONFIG.TOKEN || "").trim()
-      });
-      const url = `${CONFIG.GAS_URL}${CONFIG.GAS_URL.includes('?') ? '&' : '?'}${params.toString()}`;
+      const token = (CONFIG.TOKEN || "").trim();
+      const url = CONFIG.GAS_URL + (CONFIG.GAS_URL.includes('?') ? '&' : '?') + 'action=' + action + '&token=' + token;
 
-      console.log("🚀 Llamando API:", action, " a URL:", url.substring(0, 50) + "...");
+      console.log("🚀 Loteando:", action);
 
       try {
         const isGet = (action === 'getData');
@@ -215,25 +211,16 @@
         };
 
         if (!isGet) {
-          options.body = JSON.stringify({ ...payload, action, token: CONFIG.TOKEN });
+          options.body = JSON.stringify({ ...payload, action, token: token });
         }
 
         const res = await fetch(isGet ? url : CONFIG.GAS_URL, options);
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-
         const data = await res.json();
         if (data.error) throw new Error(data.error);
         return data;
       } catch (e) {
-        console.error("❌ Catch API Detailed:", e);
-        if (e.message.includes('REPLACE_WITH')) {
-          throw new Error("⚠️ Faltan Secrets en GitHub (REPLACE_WITH detectado).");
-        }
-        // Si es un error de fetch puro (CORS o red)
-        if (e.message.includes('fetch')) {
-          throw new Error("❌ No se pudo conectar con Google. Verificá: 1) Que la URL en GitHub sea la correcta, 2) Que la Web App esté publicada para 'Anyone'.");
-        }
-        throw new Error(`❌ Error: ${e.message}`);
+        console.error("❌ API Error:", e);
+        throw e;
       }
     }
 
