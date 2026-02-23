@@ -278,7 +278,13 @@
                 <td>${daysCell(i)}</td>
                 <td>${badge}</td>
                 <td><div class="row-actions">
-                    ${!isS ? `<button class="action-btn wa" onclick="shareWhatsApp(${i.idx})">WA</button><button class="action-btn sell" onclick="openSellModal(${i.idx})">Vender</button>` : ''}
+                    ${!isS ? `
+                      <button class="action-btn wa" onclick="shareWhatsApp(${i.idx})" title="Compartir WhatsApp">
+                        <svg width="16" height="16" fill="currentColor" viewBox="0 0 24 24"><path d="M12.012 2c-5.508 0-9.987 4.479-9.987 9.987 0 1.757.455 3.409 1.25 4.847l-1.327 4.84 4.954-1.301c1.411.769 3.014 1.213 4.717 1.213 5.503 0 9.981-4.478 9.981-9.986 0-5.508-4.478-9.987-9.988-9.987zm.006 18.254c-1.577 0-3.046-.419-4.316-1.149l-.309-.178-3.213.843.858-3.132-.196-.312c-.792-1.264-1.21-2.723-1.21-4.226 0-4.41 3.589-7.999 7.994-7.999 4.411 0 7.994 3.588 7.994 7.999 0 4.411-3.582 7.999-7.994 7.999h-.008z"/></svg>
+                      </button>
+                      <button class="action-btn sell" onclick="openSellModal(${i.idx})" title="Registrar Venta">
+                        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" /></svg>
+                      </button>` : ''}
                 </div></td>
             </tr>`;
       }).join('');

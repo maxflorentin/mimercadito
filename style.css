@@ -231,7 +231,17 @@ body {
 .row-actions {
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: 8px;
+  /* Más espacio */
+  justify-content: flex-end;
+}
+
+.action-btn.wa {
+  color: var(--color-wa);
+}
+
+.action-btn.sell {
+  color: var(--color-accent);
 }
 
 /* ── Badge ── */
