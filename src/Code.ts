@@ -47,22 +47,24 @@ function setupSecrets() {
   props.setProperties({
     "SPREADSHEET_ID": "PONER_ACA_ID_DEL_SHEET",
     "DRIVE_FOLDER_ID": "PONER_ACA_ID_DE_CARPETA",
-    "AUTHORIZED_EMAILS": "tu@email.com,otro@email.com"
+    "AUTHORIZED_EMAILS": "tu@email.com,otro@email.com",
+    "API_TOKEN": "un_token_seguro_y_largo_aca"
   });
   console.log("✅ Secretos configurados.");
 }
+
+const API_TOKEN = props.getProperty("API_TOKEN") || "default_dev_token";
 
 // ── Entry point ───────────────────────────────────────────────────────────────
 
 function doGet(e: GoogleAppsScript.Events.DoGet): GoogleAppsScript.HTML.HtmlOutput | GoogleAppsScript.Content.TextOutput {
   const action = e.parameter["action"];
 
-  // Si viene con una acción, responder como API JSON
   if (action) {
     return handleApiRequest(e);
   }
 
-  // De lo contrario, seguir sirviendo el Dashboard tradicional (mientras migramos)
+  // De lo contrario, servir Dashboard (backward compatibility)
   const page = e.parameter["p"] || "Dashboard";
   const userEmail = Session.getActiveUser().getEmail();
   const isAuthorized = AUTHORIZED_EMAILS.indexOf(userEmail) !== -1 || userEmail === "";
@@ -80,25 +82,54 @@ function doGet(e: GoogleAppsScript.Events.DoGet): GoogleAppsScript.HTML.HtmlOutp
 }
 
 /**
+ * Handle external POST requests (for data mutation from Vercel/GitHub Pages)
+ */
+function doPost(e: GoogleAppsScript.Events.DoPost): GoogleAppsScript.Content.TextOutput {
+  return handleApiRequest(e);
+}
+
+/**
  * Dispatcher para llamadas externas vía fetch()
  */
 function handleApiRequest(e: any): GoogleAppsScript.Content.TextOutput {
-  const action = e.parameter["action"];
-  let result: any;
+  const params = e.parameter;
+  const action = params["action"] || (e.postData ? JSON.parse(e.postData.contents).action : null);
+  const token = params["token"] || (e.postData ? JSON.parse(e.postData.contents).token : null);
 
+  // Basic Security Check
+  if (token !== API_TOKEN) {
+    return createJsonResponse({ error: "Unauthorized: Invalid API Token" });
+  }
+
+  let result: any;
   try {
+    const payload = e.postData ? JSON.parse(e.postData.contents) : params;
+
     switch (action) {
       case "getData":
         result = getInventoryData();
         break;
+      case "processForm":
+        result = processForm(payload);
+        break;
+      case "markSold":
+        result = markSold(Number(payload.rowIndex), Number(payload.salePrice));
+        break;
+      case "softDelete":
+        result = softDelete(Number(payload.rowIndex));
+        break;
       default:
-        result = { error: "Action not found" };
+        result = { error: "Action '" + action + "' not found" };
     }
   } catch (err) {
     result = { error: String(err) };
   }
 
-  return ContentService.createTextOutput(JSON.stringify(result))
+  return createJsonResponse(result);
+}
+
+function createJsonResponse(data: any): GoogleAppsScript.Content.TextOutput {
+  return ContentService.createTextOutput(JSON.stringify(data))
     .setMimeType(ContentService.MimeType.JSON);
 }
 
