@@ -1,7 +1,7 @@
 {
-  "name": "ventas2026",
+  "name": "mimercadito",
   "version": "1.0.0",
-  "description": "Inventory system for Google Apps Script",
+  "description": "Premium Inventory System - miMercadito",
   "scripts": {
     "typecheck": "tsc --noEmit",
     "build": "tsc",
