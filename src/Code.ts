@@ -61,79 +61,82 @@ function setupSecrets() {
 // ── Entry point ───────────────────────────────────────────────────────────────
 
 function doGet(e: GoogleAppsScript.Events.DoGet): GoogleAppsScript.HTML.HtmlOutput | GoogleAppsScript.Content.TextOutput {
-  const config = getSettings();
-  const action = e.parameter["action"];
+  try {
+    const action = e.parameter["action"];
+    if (action) return handleApiRequest(e);
 
-  if (action) {
-    return handleApiRequest(e);
+    const config = getSettings();
+    const page = e.parameter["p"] || "index";
+    const userEmail = Session.getActiveUser().getEmail();
+    const isAuthorized = config.AUTHORIZED_EMAILS.indexOf(userEmail) !== -1 || userEmail === "";
+
+    if (!isAuthorized) return HtmlService.createHtmlOutput("<h2>Access Denied</h2>");
+
+    const template = HtmlService.createTemplateFromFile(page);
+    return template
+      .evaluate()
+      .setTitle("Inventory System")
+      .addMetaTag("viewport", "width=device-width, initial-scale=1")
+      .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+  } catch (err) {
+    if (e.parameter["action"]) return createJsonResponse({ error: "CRITICAL_GET_ERROR: " + String(err) });
+    return HtmlService.createHtmlOutput("<h2>Error Crítico</h2><p>" + err + "</p>");
   }
-
-  // De lo contrario, servir Index SPA (backward compatibility/GAS view)
-  const page = e.parameter["p"] || "index";
-  const userEmail = Session.getActiveUser().getEmail();
-  const isAuthorized = config.AUTHORIZED_EMAILS.indexOf(userEmail) !== -1 || userEmail === "";
-
-  if (!isAuthorized) {
-    return HtmlService.createHtmlOutput("<h2>Access Denied</h2>");
-  }
-
-  const template = HtmlService.createTemplateFromFile(page);
-  return template
-    .evaluate()
-    .setTitle("Inventory System")
-    .addMetaTag("viewport", "width=device-width, initial-scale=1")
-    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
 }
 
 /**
  * Handle external POST requests (for data mutation from Vercel/GitHub Pages)
  */
 function doPost(e: GoogleAppsScript.Events.DoPost): GoogleAppsScript.Content.TextOutput {
-  return handleApiRequest(e);
+  try {
+    return handleApiRequest(e);
+  } catch (err) {
+    return createJsonResponse({ error: "CRITICAL_POST_ERROR: " + String(err) });
+  }
 }
 
 /**
  * Dispatcher para llamadas externas vía fetch()
  */
 function handleApiRequest(e: any): GoogleAppsScript.Content.TextOutput {
-  let result: any;
+  let config: any;
   try {
-    const config = getSettings();
-    const params = e.parameter;
-    const postData = e.postData ? JSON.parse(e.postData.contents) : {};
-
-    const action = params["action"] || postData.action;
-    const token = params["token"] || postData.token;
-
-    // Check Token
-    if (token !== config.API_TOKEN) {
-      return createJsonResponse({ error: "Unauthorized: Invalid API Token" });
-    }
-
-    const payload = e.postData ? postData : params;
-
-    switch (action) {
-      case "getData":
-        result = getInventoryData();
-        break;
-      case "processForm":
-        result = processForm(payload);
-        break;
-      case "markSold":
-        result = markSold(Number(payload.rowIndex), Number(payload.salePrice));
-        break;
-      case "softDelete":
-        result = softDelete(Number(payload.rowIndex));
-        break;
-      default:
-        result = { error: "Action '" + action + "' not found" };
-    }
+    config = getSettings();
   } catch (err) {
-    // Si falla algo crítico, devolver JSON con el error para evitar CORS
-    result = { error: "GAS_SERVER_ERROR: " + String(err) };
+    return createJsonResponse({ error: "SETTINGS_ERROR: " + String(err) });
   }
 
-  return createJsonResponse(result);
+  const params = e.parameter || {};
+  let postData: any = {};
+  if (e.postData && e.postData.contents) {
+    try {
+      postData = JSON.parse(e.postData.contents);
+    } catch (f) { }
+  }
+
+  const action = (params["action"] || postData.action || "").trim();
+  const token = (params["token"] || postData.token || "").trim();
+
+  // Check Token (with trim for safety)
+  if (!token || token !== config.API_TOKEN.trim()) {
+    return createJsonResponse({ error: "Unauthorized: Invalid API Token." });
+  }
+
+  const payload = (e.postData && e.postData.contents) ? postData : params;
+
+  try {
+    let result: any;
+    switch (action) {
+      case "getData": result = getInventoryData(); break;
+      case "processForm": result = processForm(payload); break;
+      case "markSold": result = markSold(Number(payload.rowIndex), Number(payload.salePrice)); break;
+      case "softDelete": result = softDelete(Number(payload.rowIndex)); break;
+      default: result = { error: "Action '" + action + "' not found" };
+    }
+    return createJsonResponse(result);
+  } catch (err) {
+    return createJsonResponse({ error: "EXECUTION_ERROR: " + String(err) });
+  }
 }
 
 function createJsonResponse(data: any): GoogleAppsScript.Content.TextOutput {

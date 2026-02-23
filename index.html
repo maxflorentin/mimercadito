@@ -66,7 +66,7 @@
             </svg>
             <input type="text" class="search-input" placeholder="Buscar…" oninput="applyFilters()" id="search-input" />
           </div>
-          <div class="filter-wrap" style="position:relative;">
+          <div class="filter-wrap">
             <select class="filter-select" onchange="applyFilters()" id="filter-status">
               <option value="">Todos</option>
               <option value="Pending">En venta</option>
@@ -218,7 +218,11 @@
         return data;
       } catch (e) {
         console.error("❌ Catch API:", e);
-        throw new Error(e.message || "Error de conexión");
+        const isSecretMissing = CONFIG.GAS_URL.includes('REPLACE_WITH');
+        const msg = isSecretMissing
+          ? "⚠️ Configuración incompleta en GitHub (faltan Secrets)."
+          : "❌ No se pudo conectar con el inventario. Verificá que la Web App en Google esté publicada como 'Anyone' y que tu TOKEN sea correcto.";
+        throw new Error(msg);
       }
     }
 
