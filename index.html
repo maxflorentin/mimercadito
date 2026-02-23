@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Inventario Premium — ventas2026</title>
+  <title>miMercadito</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
@@ -22,7 +22,7 @@
 
   <!-- Navbar -->
   <div class="preview-nav">
-    <div class="preview-brand">ventas2026 <span>· inventory</span></div>
+    <div class="preview-brand">miMercadito <span>· inventory</span></div>
     <div class="tab-group">
       <button class="tab-btn active" onclick="showView('dashboard')" id="btn-nav-dashboard">Dashboard</button>
       <button class="tab-btn" onclick="showView('formulario')" id="btn-nav-formulario">Nuevo</button>
@@ -323,9 +323,9 @@
 
     function shareWhatsApp(idx) {
       const i = items.find(it => it.idx == idx);
-      let msg = `🛒 *${i.name}*\n💰 $${i.listPrice.toLocaleString()}\n\n_¿Te interesa?_`;
+      let msg = `\uD83D\uDED2 *${i.name}*\n\uD83D\uDCB0 $${i.listPrice.toLocaleString()}\n\n_¿Te interesa?_`;
       if (i.photoUrl && i.photoUrl.includes('drive.google.com')) {
-        msg += `\n\n📸 Ver foto:\n${i.photoUrl}`;
+        msg += `\n\n\uD83D\uDCF8 Ver foto:\n${i.photoUrl}`;
       }
       window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
     }

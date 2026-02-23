@@ -1,4 +1,4 @@
-# ventas2026 - Sistema de Inventario
+# miMercadito - Sistema de Inventario
 
 Sistema de gestión de inventario con Google Sheets como backend y una interfaz moderna tipo Apple.
 
