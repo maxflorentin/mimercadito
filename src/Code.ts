@@ -1,14 +1,29 @@
-// ============================================================
-//  ventas2026 — Google Apps Script backend (Secure API)
-// ============================================================
+/** 
+ * GLOBAL_ENV: Placeholder para inyección automática desde GitHub Actions.
+ * Para uso local, se completa vía setupSecrets() o editando este objeto.
+ */
+const GLOBAL_ENV = {
+  SPREADSHEET_ID: 'REPLACE_WITH_SPREADSHEET_ID',
+  DRIVE_FOLDER_ID: 'REPLACE_WITH_DRIVE_FOLDER_ID',
+  API_TOKEN: 'REPLACE_WITH_API_TOKEN',
+  AUTHORIZED_EMAILS: 'REPLACE_WITH_EMAILS'
+};
 
 function getSettings() {
   const p = PropertiesService.getScriptProperties().getProperties();
+
+  // Prioridad: Inyección directa > Propiedades del script > Defaults
+  const get = (key: keyof typeof GLOBAL_ENV) => {
+    const val = GLOBAL_ENV[key];
+    if (val && !val.includes('REPLACE_WITH')) return val;
+    return p[key] || "";
+  };
+
   return {
-    SPREADSHEET_ID: p["SPREADSHEET_ID"] || "",
-    DRIVE_FOLDER_ID: p["DRIVE_FOLDER_ID"] || "",
-    AUTHORIZED_EMAILS: (p["AUTHORIZED_EMAILS"] || "").split(","),
-    API_TOKEN: p["API_TOKEN"] || "default_dev_token"
+    SPREADSHEET_ID: get("SPREADSHEET_ID"),
+    DRIVE_FOLDER_ID: get("DRIVE_FOLDER_ID"),
+    API_TOKEN: get("API_TOKEN") || "default_token",
+    AUTHORIZED_EMAILS: (get("AUTHORIZED_EMAILS") || "").split(",")
   };
 }
 

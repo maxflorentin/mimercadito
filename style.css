@@ -193,15 +193,21 @@ body {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 30px;
-  height: 30px;
+  width: 32px;
+  height: 32px;
   border: none;
   border-radius: var(--r-sm);
-  background: transparent;
+  background: rgba(0, 0, 0, 0.03);
   cursor: pointer;
   color: var(--color-text-tertiary);
   transition: all var(--duration) var(--ease);
   padding: 0;
+}
+
+.action-btn svg {
+  width: 18px;
+  height: 18px;
+  display: block;
 }
 
 .action-btn:hover {
