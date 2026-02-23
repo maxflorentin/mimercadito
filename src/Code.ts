@@ -1,0 +1,223 @@
+// ============================================================
+//  ventas2026 — Google Apps Script backend (Secure API)
+// ============================================================
+
+const props = PropertiesService.getScriptProperties();
+const SPREADSHEET_ID = props.getProperty("SPREADSHEET_ID") || "";
+const DRIVE_FOLDER_ID = props.getProperty("DRIVE_FOLDER_ID") || "";
+const AUTHORIZED_EMAILS = (props.getProperty("AUTHORIZED_EMAILS") || "").split(",");
+
+// ── Types ─────────────────────────────────────────────────────────────────────
+
+interface FormPayload {
+  productName: string;
+  category: string;
+  condition: string | number;
+  costPrice?: string | number;   // optional — some items have no known cost
+  publicPrice: string | number;
+  minPrice: string | number;
+  notes?: string;
+  imageBlob?: string | null;
+}
+
+// Column indices (0-based) in the Sheet — keep in sync with the header row
+const COL = {
+  DATE: 0,
+  NAME: 1,
+  CATEGORY: 2,
+  CONDITION: 3,
+  COST: 4,
+  LIST: 5,
+  FLOOR: 6,
+  NOTES: 7,
+  PHOTO: 8,
+  STATUS: 9,
+  SALE_PRICE: 10,
+  SALE_DATE: 11,
+} as const;
+
+type InventoryRow = string[];
+type InventoryData = InventoryRow[];
+
+/**
+ * ONE-TIME SETUP: Run this function in the Apps Script Editor to set your IDs securely.
+ */
+function setupSecrets() {
+  const props = PropertiesService.getScriptProperties();
+  props.setProperties({
+    "SPREADSHEET_ID": "PONER_ACA_ID_DEL_SHEET",
+    "DRIVE_FOLDER_ID": "PONER_ACA_ID_DE_CARPETA",
+    "AUTHORIZED_EMAILS": "tu@email.com,otro@email.com"
+  });
+  console.log("✅ Secretos configurados.");
+}
+
+// ── Entry point ───────────────────────────────────────────────────────────────
+
+function doGet(e: GoogleAppsScript.Events.DoGet): GoogleAppsScript.HTML.HtmlOutput | GoogleAppsScript.Content.TextOutput {
+  const action = e.parameter["action"];
+
+  // Si viene con una acción, responder como API JSON
+  if (action) {
+    return handleApiRequest(e);
+  }
+
+  // De lo contrario, seguir sirviendo el Dashboard tradicional (mientras migramos)
+  const page = e.parameter["p"] || "Dashboard";
+  const userEmail = Session.getActiveUser().getEmail();
+  const isAuthorized = AUTHORIZED_EMAILS.indexOf(userEmail) !== -1 || userEmail === "";
+
+  if (!isAuthorized) {
+    return HtmlService.createHtmlOutput("<h2>Access Denied</h2>");
+  }
+
+  const template = HtmlService.createTemplateFromFile(page);
+  return template
+    .evaluate()
+    .setTitle("Inventory System")
+    .addMetaTag("viewport", "width=device-width, initial-scale=1")
+    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+}
+
+/**
+ * Dispatcher para llamadas externas vía fetch()
+ */
+function handleApiRequest(e: any): GoogleAppsScript.Content.TextOutput {
+  const action = e.parameter["action"];
+  let result: any;
+
+  try {
+    switch (action) {
+      case "getData":
+        result = getInventoryData();
+        break;
+      default:
+        result = { error: "Action not found" };
+    }
+  } catch (err) {
+    result = { error: String(err) };
+  }
+
+  return ContentService.createTextOutput(JSON.stringify(result))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+// Utility used in HTML templates: <?!= include('theme') ?>
+function include(filename: string): string {
+  return HtmlService.createHtmlOutputFromFile(filename).getContent();
+}
+
+function getScriptUrl(): string {
+  return ScriptApp.getService().getUrl();
+}
+
+// ── Data ──────────────────────────────────────────────────────────────────────
+
+function getInventoryData(): InventoryData | string {
+  try {
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const sheet = ss.getSheets()[0];
+    const values = sheet.getDataRange().getValues();
+
+    if (values.length <= 1) return [];
+
+    // Normalize every cell to string to avoid Date/Number serialization issues
+    const cleanData: InventoryData = values.slice(1).map((row) =>
+      row.map((cell) => String(cell))
+    );
+
+    return cleanData;
+  } catch (err) {
+    return `Error: ${String(err)}`;
+  }
+}
+
+// ── Write ─────────────────────────────────────────────────────────────────────
+
+function processForm(formObject: FormPayload): string {
+  try {
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const sheet = ss.getSheetByName("Inventario") ?? ss.getSheets()[0];
+
+    const folder = DriveApp.getFolderById(DRIVE_FOLDER_ID);
+
+    let fileUrl = "";
+
+    if (formObject.imageBlob && formObject.imageBlob.includes(",")) {
+      const [meta, b64] = formObject.imageBlob.split(",");
+      const contentType = meta.split(":")[1].split(";")[0];
+      const bytes = Utilities.base64Decode(b64);
+      const blob = Utilities.newBlob(
+        bytes,
+        contentType,
+        `${formObject.productName}.jpg`
+      );
+      const file = folder.createFile(blob);
+
+      // Make publicly accessible so Web Share API / WhatsApp can fetch the image.
+      // The folder is already "Anyone with link can view"; this is explicit insurance.
+      file.setSharing(
+        DriveApp.Access.ANYONE_WITH_LINK,
+        DriveApp.Permission.VIEW
+      );
+
+      // Direct-view URL — works with fetch() and WhatsApp image preview
+      fileUrl = `https://drive.google.com/uc?export=view&id=${file.getId()}`;
+    }
+
+    sheet.appendRow([
+      new Date(),                          // COL.DATE
+      formObject.productName,              // COL.NAME
+      formObject.category,                 // COL.CATEGORY
+      formObject.condition,                // COL.CONDITION
+      formObject.costPrice ?? "",          // COL.COST  ← nuevo
+      formObject.publicPrice,              // COL.LIST
+      formObject.minPrice,                 // COL.FLOOR
+      formObject.notes ?? "",              // COL.NOTES
+      fileUrl,                             // COL.PHOTO
+      "Pending",                           // COL.STATUS
+      "",                                  // COL.SALE_PRICE (vacío hasta vender)
+      "",                                  // COL.SALE_DATE  (vacío hasta vender)
+    ]);
+
+    return "✅ Producto guardado.";
+  } catch (err) {
+    return `❌ Error: ${String(err)}`;
+  }
+}
+
+// ── Update operations ─────────────────────────────────────────────────────────
+
+/**
+ * Mark a row as sold. Called from the dashboard "Cerrar venta" modal.
+ * rowIndex is 1-based (Sheet row number, including header row).
+ */
+function markSold(rowIndex: number, salePrice: number): string {
+  try {
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const sheet = ss.getSheetByName("Inventario") ?? ss.getSheets()[0];
+    sheet.getRange(rowIndex, COL.STATUS + 1).setValue("Sold");
+    sheet.getRange(rowIndex, COL.SALE_PRICE + 1).setValue(salePrice);
+    sheet.getRange(rowIndex, COL.SALE_DATE + 1).setValue(
+      Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd")
+    );
+    return "✅ Venta registrada.";
+  } catch (err) {
+    return `❌ Error: ${String(err)}`;
+  }
+}
+
+/**
+ * Soft-delete: set status to "Deleted". Data is preserved in the Sheet.
+ * rowIndex is 1-based.
+ */
+function softDelete(rowIndex: number): string {
+  try {
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const sheet = ss.getSheetByName("Inventario") ?? ss.getSheets()[0];
+    sheet.getRange(rowIndex, COL.STATUS + 1).setValue("Deleted");
+    return "✅ Producto archivado.";
+  } catch (err) {
+    return `❌ Error: ${String(err)}`;
+  }
+}

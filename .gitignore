@@ -1,0 +1,17 @@
+# Dependencies
+node_modules/
+
+# Build and production artifacts
+build/
+deploy/
+.clasp.json
+
+# Logs
+logs
+*.log
+
+# OS generated files
+.DS_Store
+
+# Preview folder (if used only for local testing)
+# preview/
