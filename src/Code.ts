@@ -38,6 +38,7 @@ interface FormPayload {
   minPrice: string | number;
   notes?: string;
   imageBlob?: string | null;
+  rowIndex?: number; // Added for updates
 }
 
 // Column indices (0-based) in the Sheet — keep in sync with the header row
@@ -146,6 +147,7 @@ function handleApiRequest(e: any): GoogleAppsScript.Content.TextOutput {
       case "processForm": result = processForm(payload); break;
       case "markSold": result = markSold(Number(payload.rowIndex), Number(payload.salePrice)); break;
       case "softDelete": result = softDelete(Number(payload.rowIndex)); break;
+      case "updateProduct": result = updateProduct(payload); break;
       default: result = { error: "Action '" + action + "' not found" };
     }
     return createJsonResponse(result);
@@ -284,6 +286,45 @@ function softDelete(rowIndex: number): string {
     const sheet = ss.getSheetByName("Inventario") ?? ss.getSheets()[0];
     sheet.getRange(rowIndex, COL.STATUS + 1).setValue("Deleted");
     return "✅ Producto archivado.";
+  } catch (err) {
+    return `❌ Error: ${String(err)}`;
+  }
+}
+
+/**
+ * Update an existing product.
+ */
+function updateProduct(payload: FormPayload): string {
+  try {
+    const config = getSettings();
+    if (!payload.rowIndex) throw new Error("Missing rowIndex for update.");
+
+    const ss = SpreadsheetApp.openById(config.SPREADSHEET_ID);
+    const sheet = ss.getSheetByName("Inventario") ?? ss.getSheets()[0];
+    const row = payload.rowIndex;
+
+    sheet.getRange(row, COL.NAME + 1).setValue(payload.productName);
+    sheet.getRange(row, COL.CATEGORY + 1).setValue(payload.category);
+    sheet.getRange(row, COL.CONDITION + 1).setValue(payload.condition);
+    sheet.getRange(row, COL.COST + 1).setValue(payload.costPrice ?? "");
+    sheet.getRange(row, COL.LIST + 1).setValue(payload.publicPrice);
+    sheet.getRange(row, COL.FLOOR + 1).setValue(payload.minPrice);
+    sheet.getRange(row, COL.NOTES + 1).setValue(payload.notes ?? "");
+
+    // Handling image update...
+    if (payload.imageBlob && payload.imageBlob.includes(",")) {
+      const folder = DriveApp.getFolderById(config.DRIVE_FOLDER_ID);
+      const [meta, b64] = payload.imageBlob.split(",");
+      const contentType = meta.split(":")[1].split(";")[0];
+      const bytes = Utilities.base64Decode(b64);
+      const blob = Utilities.newBlob(bytes, contentType, `${payload.productName}.jpg`);
+      const file = folder.createFile(blob);
+      file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+      const fileUrl = `https://drive.google.com/uc?export=view&id=${file.getId()}`;
+      sheet.getRange(row, COL.PHOTO + 1).setValue(fileUrl);
+    }
+
+    return "✅ Producto actualizado.";
   } catch (err) {
     return `❌ Error: ${String(err)}`;
   }
