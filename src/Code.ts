@@ -158,13 +158,18 @@ function getScriptUrl(): string {
 function getInventoryData(): InventoryData | string {
   try {
     const config = getSettings();
-    const id = config.SPREADSHEET_ID.trim();
-    if (!id || id.includes("PONER_ACA")) {
-      return "Error: SPREADSHEET_ID no configurado o tiene el valor de ejemplo.";
+    const id = (config.SPREADSHEET_ID || "").trim();
+
+    if (!id || id.length < 10 || id.includes("PONER_ACA")) {
+      return "Error: SPREADSHEET_ID no configurado o inválido. Ejecutá setupSecrets en GAS.";
     }
 
-    console.log("Intentando abrir Spreadsheet ID:", id);
-    const ss = SpreadsheetApp.openById(id);
+    let ss: GoogleAppsScript.Spreadsheet.Spreadsheet;
+    try {
+      ss = SpreadsheetApp.openById(id);
+    } catch (e) {
+      return "Error: No se pudo abrir el Spreadsheet (ID: " + id.substring(0, 5) + "...). Verificá que el ID sea correcto y que el script tenga permisos.";
+    }
     const sheet = ss.getSheets()[0];
     const values = sheet.getDataRange().getValues();
 
