@@ -1,0 +1,16 @@
+{
+  "name": "ventas2026",
+  "version": "1.0.0",
+  "description": "Inventory system for Google Apps Script",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build": "tsc",
+    "deploy": "npm run build && mkdir -p deploy && echo '<style>' > deploy/theme.html && cat style.css >> deploy/theme.html && echo '</style>' >> deploy/theme.html && cp appsscript.json index.html deploy/ && cp build/Code.js deploy/Code.gs && clasp push",
+    "preview": "npx serve preview -p 3000",
+    "dev": "npx serve preview -p 3000"
+  },
+  "devDependencies": {
+    "@types/google-apps-script": "^1.0.83",
+    "typescript": "^5.3.3"
+  }
+}

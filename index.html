@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Inventario Premium — ventas2026</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+
+  <!-- Estilos (Standalone / GitHub Pages) -->
+  <link rel="stylesheet" href="style.css">
+
+  <!-- Estilos (Google Apps Script - Inyectado al desplegar) -->
+  <? if (typeof include !== 'undefined') { ?>
+  <?!= include('theme') ?>
+  <? } ?>
+</head>
+
+<body>
+
+  <!-- Navbar -->
+  <div class="preview-nav">
+    <div class="preview-brand">ventas2026 <span>· inventory</span></div>
+    <div class="tab-group">
+      <button class="tab-btn active" onclick="showView('dashboard')" id="btn-nav-dashboard">Dashboard</button>
+      <button class="tab-btn" onclick="showView('formulario')" id="btn-nav-formulario">Nuevo</button>
+    </div>
+  </div>
+
+  <div class="page" id="view-dashboard">
+    <div class="stat-grid" style="margin-bottom:var(--sp-5);">
+      <div class="stat-card">
+        <p class="stat-label">En venta</p>
+        <p class="stat-value" id="stat-pending">—</p>
+      </div>
+      <div class="stat-card">
+        <p class="stat-label">Vendidos</p>
+        <p class="stat-value text-accent" id="stat-sold">—</p>
+      </div>
+      <div class="stat-card">
+        <p class="stat-label">Stock valorizado</p>
+        <p class="stat-value" id="stat-stock">—</p>
+      </div>
+      <div class="stat-card">
+        <p class="stat-label">Ingreso ventas</p>
+        <p class="stat-value text-success" id="stat-profit">—</p>
+      </div>
+      <div class="stat-card">
+        <p class="stat-label">Prom. días stock</p>
+        <p class="stat-value text-warning" id="stat-avgdays">—</p>
+      </div>
+    </div>
+
+    <div class="card" style="padding:0;overflow:hidden;">
+      <div class="flex items-center justify-between"
+        style="padding:var(--sp-5) var(--sp-5) var(--sp-4);flex-wrap:wrap;gap:var(--sp-3);">
+        <p class="text-subtitle">Productos</p>
+        <div class="toolbar">
+          <div class="search-wrap" style="position:relative;flex:1;min-width:140px;">
+            <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"
+              style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--color-text-tertiary);pointer-events:none;">
+              <circle cx="11" cy="11" r="8" />
+              <path d="m21 21-4.35-4.35" />
+            </svg>
+            <input type="text" class="search-input" placeholder="Buscar…" oninput="applyFilters()" id="search-input" />
+          </div>
+          <div class="filter-wrap" style="position:relative;">
+            <select class="filter-select" onchange="applyFilters()" id="filter-status">
+              <option value="">Todos</option>
+              <option value="Pending">En venta</option>
+              <option value="Sold">Vendidos</option>
+              <option value="Deleted">Archivados</option>
+            </select>
+          </div>
+          <span id="table-count" class="badge badge-neutral">— items</span>
+        </div>
+      </div>
+      <div style="border-top:1px solid var(--color-border);overflow-x:auto;">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Producto</th>
+              <th>Categoría</th>
+              <th>Costo</th>
+              <th>Lista / Piso</th>
+              <th>Margen</th>
+              <th>Días</th>
+              <th>Estado</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="tableBody">
+            <tr>
+              <td colspan="8" style="text-align:center;color:var(--color-text-tertiary);padding:36px;">⏳ Conectando al
+                inventario…</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="page-narrow" id="view-formulario" style="display:none; margin-top: var(--sp-8);">
+    <div style="margin-bottom:var(--sp-6);">
+      <h1 class="text-title">Nuevo producto</h1>
+      <p class="text-secondary" style="font-size:var(--text-sm);margin-top:2px;">Cargá los datos del nuevo item.</p>
+    </div>
+
+    <div class="card">
+      <form id="productForm" class="flex flex-col gap-4">
+        <div class="form-group">
+          <label class="form-label">Nombre del producto</label>
+          <input type="text" name="productName" class="form-control" placeholder="MacBook Pro, iPhone 15…" required />
+        </div>
+        <div class="grid-2">
+          <div class="form-group"><label class="form-label">Categoría</label><select name="category"
+              class="form-select form-control">
+              <option>Electronics</option>
+              <option>Home</option>
+              <option>Fashion</option>
+              <option>Other</option>
+            </select></div>
+          <div class="form-group"><label class="form-label">Estado (1–10)</label><input type="number" name="condition"
+              class="form-control" min="1" max="10" value="10" /></div>
+        </div>
+        <div class="grid-3">
+          <div class="form-group"><label class="form-label">Costo ($)</label><input type="number" name="costPrice"
+              class="form-control" placeholder="0" /></div>
+          <div class="form-group"><label class="form-label">P. Lista ($)</label><input type="number" name="publicPrice"
+              class="form-control" required /></div>
+          <div class="form-group"><label class="form-label">P. Piso ($)</label><input type="number" name="minPrice"
+              class="form-control" required /></div>
+        </div>
+        <div class="form-group"><label class="form-label">Notas</label><input type="text" name="notes"
+            class="form-control" /></div>
+        <div class="form-group">
+          <label class="form-label">Foto</label>
+          <label for="photo" class="btn btn-secondary w-full"
+            style="height:auto;padding:16px;border-style:dashed;flex-direction:column;gap:var(--sp-2);">
+            <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
+              <circle cx="12" cy="13" r="4" />
+            </svg>
+            <span id="photo-label">Sacar foto</span>
+            <input type="file" id="photo" style="display:none;" accept="image/*" capture="environment"
+              onchange="previewImage(this)" />
+          </label>
+          <div id="image-preview-container" style="display:none;margin-top:var(--sp-2);position:relative;">
+            <img id="image-preview" src="" style="width:100%;border-radius:var(--r-md);" />
+            <button type="button" onclick="clearPhoto()"
+              style="position:absolute;top:8px;right:8px;background:rgba(0,0,0,0.5);color:white;border:none;border-radius:50%;width:24px;height:24px;">✕</button>
+          </div>
+        </div>
+        <button type="button" id="submitBtn" class="btn btn-primary w-full" onclick="startUpload()">Guardar
+          producto</button>
+        <div id="status" style="min-height:36px;text-align:center;"></div>
+      </form>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="modal-overlay" onclick="handleOverlayClick(event)">
+    <div class="modal" id="modal">
+      <div class="modal-header">
+        <p class="modal-title" id="modal-title">—</p>
+        <p class="modal-subtitle" id="modal-subtitle"></p>
+      </div>
+      <div class="modal-body" id="modal-body"></div>
+      <div class="modal-footer" id="modal-footer"></div>
+    </div>
+  </div>
+  <div class="toast-stack" id="toast-stack"></div>
+
+  <!-- Script de Configuración (será generado/inyectado por GH Actions) -->
+  <script src="config.js"></script>
+
+  <script>
+    const COL = { DATE: 0, NAME: 1, CAT: 2, COND: 3, COST: 4, LIST: 5, FLOOR: 6, NOTES: 7, PHOTO: 8, STATUS: 9, SALE_PRICE: 10, SALE_DATE: 11 };
+    let items = [];
+
+    function showView(v) {
+      document.getElementById('view-dashboard').style.display = (v === 'dashboard' ? 'block' : 'none');
+      document.getElementById('view-formulario').style.display = (v === 'formulario' ? 'block' : 'none');
+      document.getElementById('btn-nav-dashboard').classList.toggle('active', v === 'dashboard');
+      document.getElementById('btn-nav-formulario').classList.toggle('active', v === 'formulario');
+      if (v === 'dashboard') loadData();
+    }
+
+    async function apiCall(action, payload = {}) {
+      // Soporte nativo para cuando se usa dentro de GAS (opcional)
+      if (typeof google !== 'undefined' && google.script && google.script.run) {
+        return new Promise((res, rej) => { google.script.run.withSuccessHandler(res).withFailureHandler(rej)[action](payload); });
+      }
+
+      if (typeof CONFIG === 'undefined') {
+        throw new Error("Configuración no encontrada. ¿Inyectaste las variables en GitHub?");
+      }
+
+      const url = CONFIG.GAS_URL + (CONFIG.GAS_URL.includes('?') ? '&' : '?') + 'action=' + action + '&token=' + CONFIG.TOKEN;
+      const options = {
+        method: 'POST',
+        body: JSON.stringify({ ...payload, action, token: CONFIG.TOKEN })
+      };
+
+      const res = await fetch(url, options);
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      return data;
+    }
+
+    window.onload = () => {
+      const urlParams = new URLSearchParams(window.location.search);
+      if (urlParams.has('token')) { localStorage.setItem('API_TOKEN', urlParams.get('token')); }
+      if (typeof CONFIG !== 'undefined' && localStorage.getItem('API_TOKEN')) { CONFIG.TOKEN = localStorage.getItem('API_TOKEN'); }
+      loadData();
+    };
+
+    async function loadData() {
+      const tbody = document.getElementById('tableBody');
+      try {
+        const data = await apiCall('getData');
+        items = data.map((row, idx) => ({
+          idx: idx + 2, date: row[COL.DATE], name: row[COL.NAME], category: row[COL.CAT],
+          condition: parseInt(row[COL.COND]), costPrice: parseFloat(row[COL.COST]) || 0,
+          listPrice: parseFloat(row[COL.LIST]) || 0, floorPrice: parseFloat(row[COL.FLOOR]) || 0,
+          notes: row[COL.NOTES], photoUrl: row[COL.PHOTO], status: row[COL.STATUS],
+          salePrice: row[COL.SALE_PRICE] ? parseFloat(row[COL.SALE_PRICE]) : null,
+          createdAt: row[COL.DATE] ? String(row[COL.DATE]).split(' ')[0] : ''
+        }));
+        renderTable(getFiltered());
+      } catch (e) { tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;color:var(--color-danger);padding:36px;">❌ ${e.message}</td></tr>`; }
+    }
+
+    function renderTable(data) {
+      updateStats();
+      const tbody = document.getElementById('tableBody');
+      document.getElementById('table-count').textContent = data.length + ' items';
+      tbody.innerHTML = data.map(i => {
+        const isS = i.status === 'Sold';
+        const cost = i.costPrice > 0 ? '$' + i.costPrice.toLocaleString() : '—';
+        const price = isS ? `<span class="text-accent">$${(i.salePrice || 0).toLocaleString()}</span>` : `$${i.listPrice.toLocaleString()}`;
+        const badge = isS ? `<span class="badge badge-success">Vendido</span>` : (i.status === 'Deleted' ? `<span class="badge badge-neutral">Archivado</span>` : `<span class="badge badge-warning">En venta</span>`);
+
+        return `<tr>
+                <td class="td-name">${i.name}</td>
+                <td><span class="badge badge-neutral">${i.category}</span></td>
+                <td class="td-mono">${cost}</td>
+                <td class="td-mono">${price}</td>
+                <td>${i.costPrice ? '$' + ((isS ? i.salePrice : i.listPrice) - i.costPrice).toLocaleString() : '—'}</td>
+                <td>${daysCell(i)}</td>
+                <td>${badge}</td>
+                <td><div class="row-actions">
+                    ${!isS ? `<button class="action-btn wa" onclick="shareWhatsApp(${i.idx})">WA</button><button class="action-btn sell" onclick="openSellModal(${i.idx})">Vender</button>` : ''}
+                </div></td>
+            </tr>`;
+      }).join('');
+    }
+
+    function updateStats() {
+      const p = items.filter(i => i.status === 'Pending');
+      const s = items.filter(i => i.status === 'Sold');
+      document.getElementById('stat-pending').textContent = p.length;
+      document.getElementById('stat-sold').textContent = s.length;
+      document.getElementById('stat-stock').textContent = '$' + p.reduce((a, b) => a + b.listPrice, 0).toLocaleString();
+      document.getElementById('stat-profit').textContent = '$' + s.reduce((a, b) => a + (b.salePrice || 0), 0).toLocaleString();
+    }
+
+    function getFiltered() {
+      const q = (document.getElementById('search-input')?.value || '').toLowerCase();
+      const st = document.getElementById('filter-status')?.value || '';
+      return items.filter(i => {
+        if (!st && i.status === 'Deleted') return false;
+        if (q && !i.name.toLowerCase().includes(q)) return false;
+        if (st && i.status !== st) return false;
+        return true;
+      });
+    }
+    function applyFilters() { renderTable(getFiltered()); }
+    function daysSince(s) { if (!s) return -1; const d = new Date(s); return isNaN(d) ? -1 : Math.floor((Date.now() - d.getTime()) / 86400000); }
+    function daysCell(i) { const d = daysSince(i.createdAt); return d < 0 ? '—' : `<span class="${d > 30 ? 'text-danger' : 'text-secondary'}">${d}d</span>`; }
+    function closeModal() { document.getElementById('modal-overlay').classList.remove('open'); }
+    function handleOverlayClick(e) { if (e.target.id === 'modal-overlay') closeModal(); }
+
+    function shareWhatsApp(idx) {
+      const i = items.find(it => it.idx == idx);
+      const msg = `🛒 *${i.name}*\n💰 $${i.listPrice.toLocaleString()}\n\n_¿Te interesa?_`;
+      window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
+    }
+
+    function openSellModal(idx) {
+      const i = items.find(it => it.idx == idx);
+      document.getElementById('modal-title').textContent = 'Venta: ' + i.name;
+      document.getElementById('modal-body').innerHTML = `<input type="number" id="m-price" class="form-control" value="${i.listPrice}" />`;
+      document.getElementById('modal-footer').innerHTML = `<button class="btn btn-primary" onclick="doSell(${idx})">Confirmar</button>`;
+      document.getElementById('modal-overlay').classList.add('open');
+    }
+    async function doSell(idx) {
+      const p = document.getElementById('m-price').value;
+      closeModal();
+      await apiCall('markSold', { rowIndex: idx, salePrice: p });
+      loadData();
+    }
+    function previewImage(i) { if (i.files[0]) { const r = new FileReader(); r.onload = e => { document.getElementById('image-preview').src = e.target.result; document.getElementById('image-preview-container').style.display = 'block'; }; r.readAsDataURL(i.files[0]); } }
+    function clearPhoto() { document.getElementById('photo').value = ''; document.getElementById('image-preview-container').style.display = 'none'; }
+    async function startUpload() {
+      const f = document.getElementById('productForm');
+      const st = document.getElementById('status');
+      st.innerHTML = '⏳ Guardando…';
+      const file = document.getElementById('photo').files[0];
+      const save = async (b64 = null) => {
+        await apiCall('processForm', { productName: f.productName.value, category: f.category.value, condition: f.condition.value, costPrice: f.costPrice.value, publicPrice: f.publicPrice.value, minPrice: f.minPrice.value, notes: f.notes.value, imageBlob: b64 });
+        f.reset(); clearPhoto(); st.innerHTML = '✅!'; setTimeout(() => showView('dashboard'), 1000);
+      };
+      if (file) { const r = new FileReader(); r.onload = e => save(e.target.result); r.readAsDataURL(file); } else save();
+    }
+  </script>
+</body>
+
+</html>
