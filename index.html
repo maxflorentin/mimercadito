@@ -199,22 +199,27 @@
       }
 
       const url = CONFIG.GAS_URL + (CONFIG.GAS_URL.includes('?') ? '&' : '?') + 'action=' + action + '&token=' + CONFIG.TOKEN;
+      console.log("🚀 Loteando acción:", action);
 
-      // Usamos GET para getData (más estable) y POST para el resto
-      const isGet = (action === 'getData');
-      const options = {
-        method: isGet ? 'GET' : 'POST',
-        redirect: 'follow'
-      };
+      try {
+        const isGet = (action === 'getData');
+        const options = {
+          method: isGet ? 'GET' : 'POST',
+          redirect: 'follow'
+        };
 
-      if (!isGet) {
-        options.body = JSON.stringify({ ...payload, action, token: CONFIG.TOKEN });
+        if (!isGet) {
+          options.body = JSON.stringify({ ...payload, action, token: CONFIG.TOKEN });
+        }
+
+        const res = await fetch(isGet ? url : CONFIG.GAS_URL, options);
+        const data = await res.json();
+        if (data.error) throw new Error(data.error);
+        return data;
+      } catch (e) {
+        console.error("❌ Catch API:", e);
+        throw new Error(e.message || "Error de conexión");
       }
-
-      const res = await fetch(isGet ? url : CONFIG.GAS_URL, options);
-      const data = await res.json();
-      if (data.error) throw new Error(data.error);
-      return data;
     }
 
     window.onload = () => {

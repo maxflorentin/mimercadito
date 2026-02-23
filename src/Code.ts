@@ -2,10 +2,15 @@
 //  ventas2026 — Google Apps Script backend (Secure API)
 // ============================================================
 
-const props = PropertiesService.getScriptProperties();
-const SPREADSHEET_ID = props.getProperty("SPREADSHEET_ID") || "";
-const DRIVE_FOLDER_ID = props.getProperty("DRIVE_FOLDER_ID") || "";
-const AUTHORIZED_EMAILS = (props.getProperty("AUTHORIZED_EMAILS") || "").split(",");
+function getSettings() {
+  const p = PropertiesService.getScriptProperties().getProperties();
+  return {
+    SPREADSHEET_ID: p["SPREADSHEET_ID"] || "",
+    DRIVE_FOLDER_ID: p["DRIVE_FOLDER_ID"] || "",
+    AUTHORIZED_EMAILS: (p["AUTHORIZED_EMAILS"] || "").split(","),
+    API_TOKEN: p["API_TOKEN"] || "default_dev_token"
+  };
+}
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -53,11 +58,10 @@ function setupSecrets() {
   console.log("✅ Secretos configurados.");
 }
 
-const API_TOKEN = props.getProperty("API_TOKEN") || "default_dev_token";
-
 // ── Entry point ───────────────────────────────────────────────────────────────
 
 function doGet(e: GoogleAppsScript.Events.DoGet): GoogleAppsScript.HTML.HtmlOutput | GoogleAppsScript.Content.TextOutput {
+  const config = getSettings();
   const action = e.parameter["action"];
 
   if (action) {
@@ -67,7 +71,7 @@ function doGet(e: GoogleAppsScript.Events.DoGet): GoogleAppsScript.HTML.HtmlOutp
   // De lo contrario, servir Index SPA (backward compatibility/GAS view)
   const page = e.parameter["p"] || "index";
   const userEmail = Session.getActiveUser().getEmail();
-  const isAuthorized = AUTHORIZED_EMAILS.indexOf(userEmail) !== -1 || userEmail === "";
+  const isAuthorized = config.AUTHORIZED_EMAILS.indexOf(userEmail) !== -1 || userEmail === "";
 
   if (!isAuthorized) {
     return HtmlService.createHtmlOutput("<h2>Access Denied</h2>");
@@ -92,18 +96,21 @@ function doPost(e: GoogleAppsScript.Events.DoPost): GoogleAppsScript.Content.Tex
  * Dispatcher para llamadas externas vía fetch()
  */
 function handleApiRequest(e: any): GoogleAppsScript.Content.TextOutput {
-  const params = e.parameter;
-  const action = params["action"] || (e.postData ? JSON.parse(e.postData.contents).action : null);
-  const token = params["token"] || (e.postData ? JSON.parse(e.postData.contents).token : null);
-
-  // Basic Security Check
-  if (token !== API_TOKEN) {
-    return createJsonResponse({ error: "Unauthorized: Invalid API Token" });
-  }
-
   let result: any;
   try {
-    const payload = e.postData ? JSON.parse(e.postData.contents) : params;
+    const config = getSettings();
+    const params = e.parameter;
+    const postData = e.postData ? JSON.parse(e.postData.contents) : {};
+
+    const action = params["action"] || postData.action;
+    const token = params["token"] || postData.token;
+
+    // Check Token
+    if (token !== config.API_TOKEN) {
+      return createJsonResponse({ error: "Unauthorized: Invalid API Token" });
+    }
+
+    const payload = e.postData ? postData : params;
 
     switch (action) {
       case "getData":
@@ -122,7 +129,8 @@ function handleApiRequest(e: any): GoogleAppsScript.Content.TextOutput {
         result = { error: "Action '" + action + "' not found" };
     }
   } catch (err) {
-    result = { error: String(err) };
+    // Si falla algo crítico, devolver JSON con el error para evitar CORS
+    result = { error: "GAS_SERVER_ERROR: " + String(err) };
   }
 
   return createJsonResponse(result);
@@ -146,7 +154,14 @@ function getScriptUrl(): string {
 
 function getInventoryData(): InventoryData | string {
   try {
-    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const config = getSettings();
+    const id = config.SPREADSHEET_ID.trim();
+    if (!id || id.includes("PONER_ACA")) {
+      return "Error: SPREADSHEET_ID no configurado o tiene el valor de ejemplo.";
+    }
+
+    console.log("Intentando abrir Spreadsheet ID:", id);
+    const ss = SpreadsheetApp.openById(id);
     const sheet = ss.getSheets()[0];
     const values = sheet.getDataRange().getValues();
 
@@ -167,10 +182,11 @@ function getInventoryData(): InventoryData | string {
 
 function processForm(formObject: FormPayload): string {
   try {
-    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const config = getSettings();
+    const ss = SpreadsheetApp.openById(config.SPREADSHEET_ID);
     const sheet = ss.getSheetByName("Inventario") ?? ss.getSheets()[0];
 
-    const folder = DriveApp.getFolderById(DRIVE_FOLDER_ID);
+    const folder = DriveApp.getFolderById(config.DRIVE_FOLDER_ID);
 
     let fileUrl = "";
 
@@ -225,7 +241,8 @@ function processForm(formObject: FormPayload): string {
  */
 function markSold(rowIndex: number, salePrice: number): string {
   try {
-    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const config = getSettings();
+    const ss = SpreadsheetApp.openById(config.SPREADSHEET_ID);
     const sheet = ss.getSheetByName("Inventario") ?? ss.getSheets()[0];
     sheet.getRange(rowIndex, COL.STATUS + 1).setValue("Sold");
     sheet.getRange(rowIndex, COL.SALE_PRICE + 1).setValue(salePrice);
@@ -244,7 +261,8 @@ function markSold(rowIndex: number, salePrice: number): string {
  */
 function softDelete(rowIndex: number): string {
   try {
-    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const config = getSettings();
+    const ss = SpreadsheetApp.openById(config.SPREADSHEET_ID);
     const sheet = ss.getSheetByName("Inventario") ?? ss.getSheets()[0];
     sheet.getRange(rowIndex, COL.STATUS + 1).setValue("Deleted");
     return "✅ Producto archivado.";
