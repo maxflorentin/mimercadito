@@ -25,9 +25,12 @@ Los IDs del Spreadsheet y de Drive, así como el API Token, se gestionan mediant
 2. Construye el proyecto: `npm run build`
 3. Despliega a GAS: `npm run deploy` (requiere `clasp` logueado).
 
-## Hosting en Vercel (White Label)
+## Hosting en GitHub Pages (White Label)
 
 Para eliminar el banner de Google y usar un dominio propio:
-1. Sube este repositorio a GitHub.
-2. Crea un nuevo proyecto en Vercel apuntando a este repo.
-3. Configura las variables de entorno en Vercel (`GAS_URL`, `API_TOKEN`).
+1. Sube este repositorio a un nuevo repo en **GitHub**.
+2. En Settings de tu repo, ve a **Secrets and variables > Actions** y agrega:
+   - `GAS_URL`: Tu URL de Web App de Google (terminada en `/exec`).
+   - `API_TOKEN`: El token secreto que configuraste en GAS.
+3. El despliegue es automático al hacer `push` a `main`. GitHub Actions creará la rama `gh-pages`.
+4. En **Settings > Pages**, elige la rama `gh-pages` como origen.

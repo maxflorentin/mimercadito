@@ -64,8 +64,8 @@ function doGet(e: GoogleAppsScript.Events.DoGet): GoogleAppsScript.HTML.HtmlOutp
     return handleApiRequest(e);
   }
 
-  // De lo contrario, servir Dashboard (backward compatibility)
-  const page = e.parameter["p"] || "Dashboard";
+  // De lo contrario, servir Index SPA (backward compatibility/GAS view)
+  const page = e.parameter["p"] || "index";
   const userEmail = Session.getActiveUser().getEmail();
   const isAuthorized = AUTHORIZED_EMAILS.indexOf(userEmail) !== -1 || userEmail === "";
 
