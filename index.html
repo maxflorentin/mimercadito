@@ -193,7 +193,7 @@
       TOKEN: 'REPLACE_WITH_API_TOKEN'
     };
 
-    const COL = { DATE: 0, NAME: 1, CAT: 2, COND: 3, COST: 4, LIST: 5, FLOOR: 6, NOTES: 7, PHOTO: 8, STATUS: 9, SALE_PRICE: 10, SALE_DATE: 11 };
+    const COL = { DATE: 0, NAME: 1, CAT: 2, COND: 3, COST: 4, LIST: 5, FLOOR: 6, NOTES: 7, PHOTO: 8, STATUS: 9, SALE_PRICE: 10, SALE_DATE: 11, ML_ID: 12, ML_LINK: 13 };
     let items = [];
 
     function showView(v) {
@@ -285,7 +285,8 @@
           listPrice: parseFloat(row[COL.LIST]) || 0, floorPrice: parseFloat(row[COL.FLOOR]) || 0,
           notes: row[COL.NOTES], photoUrl: row[COL.PHOTO], status: row[COL.STATUS],
           salePrice: row[COL.SALE_PRICE] ? parseFloat(row[COL.SALE_PRICE]) : null,
-          createdAt: row[COL.DATE] ? String(row[COL.DATE]).split(' ')[0] : ''
+          createdAt: row[COL.DATE] ? String(row[COL.DATE]).split(' ')[0] : '',
+          mlId: row[COL.ML_ID], mlLink: row[COL.ML_LINK]
         }));
         renderTable(getFiltered());
       } catch (e) { tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;color:var(--color-danger);padding:36px;">❌ ${e.message}</td></tr>`; }
@@ -321,6 +322,9 @@
                       </button>
                       <button class="action-btn sell" onclick="editProduct(${i.idx})" title="Editar Producto">
                         <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 113 3L12 15l-4 1 1-4 9.5-9.5z" /></svg>
+                      </button>
+                      <button class="action-btn ml ${i.mlId ? 'published' : ''}" onclick="${i.mlId ? `window.open('${i.mlLink}', '_blank')` : `publishML(${i.idx})`}" title="${i.mlId ? 'Ver en Mercado Libre' : 'Publicar en Mercado Libre'}">
+                        <svg width="16" height="16" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm-1-13h2v6h-2zm0 8h2v2h-2z"/></svg>
                       </button>
                       <button class="action-btn sell" onclick="openSellModal(${i.idx})" title="Registrar Venta">
                         <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" /></svg>
@@ -471,6 +475,30 @@
         setTimeout(() => showView('dashboard'), 1000);
       };
       if (file) { const r = new FileReader(); r.onload = e => save(e.target.result); r.readAsDataURL(file); } else save();
+    }
+
+    async function publishML(idx) {
+      const i = items.find(it => it.idx == idx);
+      if (!confirm(`¿Publicar "${i.name}" en Mercado Libre?`)) return;
+
+      showToast("⏳ Publicando en Mercado Libre...", "loading");
+      try {
+        const res = await apiCall('publishToML', { rowIndex: idx });
+        if (res.error) throw new Error(res.error);
+        showToast(res.message || "✅ Publicado correctamente", "success");
+        loadData();
+      } catch (e) {
+        showToast("❌ Error: " + e.message, "error");
+      }
+    }
+
+    function showToast(msg, type = "") {
+      const stack = document.getElementById('toast-stack');
+      const t = document.createElement('div');
+      t.className = `toast ${type}`;
+      t.textContent = msg;
+      stack.appendChild(t);
+      setTimeout(() => t.remove(), 4000);
     }
   </script>
 </body>
