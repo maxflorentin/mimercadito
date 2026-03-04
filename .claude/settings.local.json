@@ -1,7 +1,9 @@
 {
   "permissions": {
     "allow": [
-      "Bash(npm run:*)"
+      "Bash(npm run:*)",
+      "WebFetch(domain:maxflorentin.github.io)",
+      "Bash(gh run:*)"
     ]
   }
 }
