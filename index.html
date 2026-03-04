@@ -20,12 +20,30 @@
 
 <body>
 
+  <!-- ═══ LOGIN ═══ -->
+  <div id="view-login" class="login-view">
+    <div class="login-card">
+      <h1 class="login-title">miMercadito</h1>
+      <p class="login-subtitle">Iniciá sesión con tu cuenta de Google</p>
+      <div id="google-signin-btn" style="display:flex;justify-content:center;margin:var(--sp-4) 0;min-height:44px;"></div>
+      <p class="login-footnote">Solo cuentas autorizadas</p>
+      <div id="login-error" class="status-msg error" style="display:none;margin-top:var(--sp-4);"></div>
+    </div>
+  </div>
+
+  <!-- ═══ APP ═══ -->
+  <div id="app-container" style="display:none;">
+
   <!-- Navbar -->
   <div class="preview-nav">
     <div class="preview-brand">miMercadito <span>· inventory</span></div>
     <div class="tab-group">
       <button class="tab-btn active" onclick="showView('dashboard')" id="btn-nav-dashboard">Dashboard</button>
       <button class="tab-btn" onclick="showView('formulario')" id="btn-nav-formulario">Nuevo</button>
+    </div>
+    <div class="nav-user">
+      <span id="nav-user-email" class="nav-email"></span>
+      <button class="btn btn-ghost btn-sm" onclick="logout()">Salir</button>
     </div>
   </div>
 
@@ -183,6 +201,11 @@
   </div>
   <div class="toast-stack" id="toast-stack"></div>
 
+  </div><!-- /app-container -->
+
+  <!-- Google Identity Services -->
+  <script src="https://accounts.google.com/gsi/client" onload="onGsiLoaded()" async defer></script>
+
   <script>
     /**
      * CONFIGURACIÓN UNIVERSAL
@@ -190,7 +213,8 @@
      */
     const CONFIG = {
       GAS_URL: 'REPLACE_WITH_GAS_URL',
-      TOKEN: 'REPLACE_WITH_API_TOKEN'
+      TOKEN: 'REPLACE_WITH_API_TOKEN',
+      GOOGLE_CLIENT_ID: 'REPLACE_WITH_GOOGLE_CLIENT_ID'
     };
 
     const COL = { DATE: 0, NAME: 1, CAT: 2, COND: 3, COST: 4, LIST: 5, FLOOR: 6, NOTES: 7, PHOTO: 8, STATUS: 9, SALE_PRICE: 10, SALE_DATE: 11, ML_ID: 12, ML_LINK: 13 };
@@ -256,11 +280,81 @@
       }
     }
 
-    window.onload = () => {
-      const urlParams = new URLSearchParams(window.location.search);
-      if (urlParams.has('token')) { localStorage.setItem('API_TOKEN', urlParams.get('token')); }
-      if (typeof CONFIG !== 'undefined' && localStorage.getItem('API_TOKEN')) { CONFIG.TOKEN = localStorage.getItem('API_TOKEN'); }
+    // ── Auth ──────────────────────────────────────────
+    var gsiReady = false;
+
+    function onGsiLoaded() {
+      gsiReady = true;
+      if (!isLoggedIn()) initGoogleButton();
+    }
+
+    function isLoggedIn() {
+      return !!localStorage.getItem('MM_EMAIL') && !!localStorage.getItem('MM_TOKEN');
+    }
+
+    function initGoogleButton() {
+      if (!gsiReady || !CONFIG.GOOGLE_CLIENT_ID || CONFIG.GOOGLE_CLIENT_ID.includes('REPLACE_WITH')) {
+        document.getElementById('login-error').textContent = 'Google Sign-In no configurado.';
+        document.getElementById('login-error').style.display = '';
+        return;
+      }
+      google.accounts.id.initialize({
+        client_id: CONFIG.GOOGLE_CLIENT_ID,
+        callback: handleGoogleAuth,
+        auto_select: false
+      });
+      google.accounts.id.renderButton(
+        document.getElementById('google-signin-btn'),
+        { theme: 'outline', size: 'large', text: 'signin_with', locale: 'es', width: 280 }
+      );
+    }
+
+    async function handleGoogleAuth(response) {
+      var errorEl = document.getElementById('login-error');
+      errorEl.style.display = 'none';
+      try {
+        var url = CONFIG.GAS_URL + '?action=googleAuth&credential=' + encodeURIComponent(response.credential);
+        var res = await fetch(url, { redirect: 'follow' });
+        var data = await res.json();
+        if (data.authorized) {
+          localStorage.setItem('MM_EMAIL', data.email);
+          localStorage.setItem('MM_TOKEN', data.token);
+          showApp();
+        } else {
+          errorEl.textContent = data.error || 'Acceso denegado';
+          errorEl.style.display = '';
+        }
+      } catch (e) {
+        errorEl.textContent = 'Error de conexión. Intentá de nuevo.';
+        errorEl.style.display = '';
+      }
+    }
+
+    function showApp() {
+      document.getElementById('view-login').style.display = 'none';
+      document.getElementById('app-container').style.display = '';
+      CONFIG.TOKEN = localStorage.getItem('MM_TOKEN') || '';
+      var email = localStorage.getItem('MM_EMAIL') || '';
+      document.getElementById('nav-user-email').textContent = email.split('@')[0];
       loadData();
+    }
+
+    function logout() {
+      localStorage.removeItem('MM_EMAIL');
+      localStorage.removeItem('MM_TOKEN');
+      if (gsiReady) google.accounts.id.disableAutoSelect();
+      location.reload();
+    }
+
+    window.onload = () => {
+      // GAS mode: skip login, load directly
+      if (typeof google !== 'undefined' && google.script && google.script.run) {
+        document.getElementById('view-login').style.display = 'none';
+        document.getElementById('app-container').style.display = '';
+        loadData();
+        return;
+      }
+      if (isLoggedIn()) { showApp(); }
     };
 
     async function loadData() {

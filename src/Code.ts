@@ -144,6 +144,12 @@ function handleApiRequest(e: any): GoogleAppsScript.Content.TextOutput {
   const action = (params["action"] || postData.action || "").trim();
   const token = (params["token"] || postData.token || "").trim();
 
+  // Google Auth — no requiere API token, valida vía JWT de Google
+  if (action === "googleAuth") {
+    const credential = params["credential"] || postData.credential || "";
+    return createJsonResponse(verifyGoogleAuth(credential));
+  }
+
   // Notificaciones de Mercado Libre (no traen nuestro token pero traen 'resource')
   if (postData.resource && postData.topic) {
     try {
@@ -191,6 +197,51 @@ function include(filename: string): string {
 
 function getScriptUrl(): string {
   return ScriptApp.getService().getUrl();
+}
+
+// ── Google Auth ──────────────────────────────────────────────────────────────
+
+function verifyGoogleAuth(credential: string): any {
+  try {
+    if (!credential) {
+      return { authorized: false, error: "No se recibió credencial de Google." };
+    }
+
+    const config = getSettings();
+
+    const parts = credential.split(".");
+    if (parts.length !== 3) {
+      return { authorized: false, error: "Token inválido." };
+    }
+
+    const decoded = Utilities.newBlob(
+      Utilities.base64DecodeWebSafe(parts[1])
+    ).getDataAsString();
+    const tokenPayload = JSON.parse(decoded);
+
+    const email = (tokenPayload.email || "").toLowerCase().trim();
+
+    if (!tokenPayload.email_verified) {
+      return { authorized: false, error: "Email no verificado." };
+    }
+
+    const now = Math.floor(Date.now() / 1000);
+    if (tokenPayload.exp && tokenPayload.exp < now) {
+      return { authorized: false, error: "Token expirado." };
+    }
+
+    const authorized = config.AUTHORIZED_EMAILS.some(
+      (e: string) => e.toLowerCase().trim() === email
+    );
+
+    if (!authorized) {
+      return { authorized: false, error: "Tu email (" + email + ") no tiene permisos para acceder." };
+    }
+
+    return { authorized: true, email: email, token: config.API_TOKEN };
+  } catch (err) {
+    return { authorized: false, error: "Error verificando credenciales: " + String(err) };
+  }
 }
 
 // ── Data ──────────────────────────────────────────────────────────────────────
@@ -462,9 +513,12 @@ function publishToML(rowIndex: number): any {
       }
     }
 
-    // 4. Preparar Payload para ML
-    const payload = {
-      title: productName,
+    // 4. Obtener atributos requeridos de la categoría y auto-completar
+    const attributes = getRequiredMLAttributes(categoryId, productName, token);
+
+    // 5. Preparar Payload para ML
+    const payload: any = {
+      family_name: productName,
       category_id: categoryId,
       price: price,
       currency_id: "ARS",
@@ -475,7 +529,13 @@ function publishToML(rowIndex: number): any {
       description: {
         plain_text: `${notes}\n\nPublicado desde miMercadito Inventory.`
       },
-      pictures: pictures
+      pictures: pictures,
+      attributes: attributes,
+      shipping: {
+        mode: "me2",
+        local_pick_up: true,
+        free_shipping: false
+      }
     };
 
     const options: GoogleAppsScript.URL_Fetch.URLFetchRequestOptions = {
@@ -491,8 +551,9 @@ function publishToML(rowIndex: number): any {
     const resData = JSON.parse(res.getContentText());
 
     if (resData.error || resData.status === 400) {
-      const errorMsg = resData.message || (resData.cause && resData.cause[0] ? resData.cause[0].message : "Error desconocido en ML");
-      throw new Error(errorMsg);
+      const fullResponse = res.getContentText();
+      console.error("ML full response:", fullResponse);
+      throw new Error(fullResponse.substring(0, 500));
     }
 
     // 6. Guardar ID y Link en el Sheet
@@ -520,15 +581,63 @@ function publishToML(rowIndex: number): any {
  */
 function predictMLCategory(title: string): string {
   try {
-    // Escapar caracteres para URL
     const url = `https://api.mercadolibre.com/sites/MLA/category_predictor/predict?title=${encodeURIComponent(title)}`;
-    const res = UrlFetchApp.fetch(url);
+    const res = UrlFetchApp.fetch(url, { muteHttpExceptions: true });
     const data = JSON.parse(res.getContentText());
 
-    // Devolvemos la primera sugerencia, o una genérica si falla
-    return data.id || "MLA1100"; // MLA1100 es genérica (Hogar, Muebles y Jardín)
+    // La respuesta puede ser { id: "MLAxxxx" } o { path_from_root: [...] }
+    if (data.id) return data.id;
+    // Si devuelve un array, tomar la primera predicción
+    if (Array.isArray(data) && data.length > 0 && data[0].id) return data[0].id;
+
+    return "MLA1055"; // Fallback: "Otros" (categoría hoja)
   } catch (e) {
-    return "MLA1100";
+    return "MLA1055";
+  }
+}
+
+/**
+ * Consulta los atributos requeridos de una categoría de ML y los auto-completa.
+ */
+function getRequiredMLAttributes(categoryId: string, productName: string, token: string): any[] {
+  try {
+    const url = `https://api.mercadolibre.com/categories/${categoryId}/attributes`;
+    const res = UrlFetchApp.fetch(url, { muteHttpExceptions: true });
+    const allAttrs = JSON.parse(res.getContentText());
+
+    if (!Array.isArray(allAttrs)) return [];
+
+    const attributes: any[] = [];
+
+    for (const attr of allAttrs) {
+      // Solo procesar atributos requeridos o que ML exige al publicar
+      const isRequired = attr.tags && (attr.tags.required || attr.tags.catalog_required);
+      if (!isRequired) continue;
+
+      const attrEntry: any = { id: attr.id };
+
+      // Si tiene valores permitidos, usar el primero como default
+      if (attr.values && attr.values.length > 0) {
+        // Intentar usar "Genérica" / "Otro" si existe, sino el primero
+        const generic = attr.values.find((v: any) =>
+          /genér|generi|otro|other|no aplic/i.test(v.name)
+        );
+        attrEntry.value_id = generic ? generic.id : attr.values[0].id;
+      } else if (attr.value_type === "string") {
+        attrEntry.value_name = productName;
+      } else if (attr.value_type === "number") {
+        attrEntry.value_name = "1";
+      } else if (attr.value_type === "boolean") {
+        attrEntry.value_name = "No";
+      }
+
+      attributes.push(attrEntry);
+    }
+
+    return attributes;
+  } catch (err) {
+    console.error("Error fetching ML attributes:", err);
+    return [];
   }
 }
 
@@ -601,7 +710,9 @@ function handleMLCallback(code: string): GoogleAppsScript.HTML.HtmlOutput {
 
     const options: GoogleAppsScript.URL_Fetch.URLFetchRequestOptions = {
       method: "post",
-      payload: payload
+      contentType: "application/json",
+      payload: JSON.stringify(payload),
+      muteHttpExceptions: true
     };
 
     const res = UrlFetchApp.fetch("https://api.mercadolibre.com/oauth/token", options);
@@ -654,7 +765,9 @@ function refreshMLToken() {
 
   const options: GoogleAppsScript.URL_Fetch.URLFetchRequestOptions = {
     method: "post",
-    payload: payload
+    contentType: "application/json",
+    payload: JSON.stringify(payload),
+    muteHttpExceptions: true
   };
 
   const res = UrlFetchApp.fetch("https://api.mercadolibre.com/oauth/token", options);
