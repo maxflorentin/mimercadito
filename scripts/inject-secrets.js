@@ -10,6 +10,8 @@ const mapping = {
   'REPLACE_WITH_DRIVE_FOLDER_ID': process.env.DRIVE_FOLDER_ID,
   'REPLACE_WITH_API_TOKEN': process.env.API_TOKEN,
   'REPLACE_WITH_EMAILS': process.env.AUTHORIZED_EMAILS,
+  'REPLACE_WITH_ML_CLIENT_ID': process.env.ML_CLIENT_ID,
+  'REPLACE_WITH_ML_CLIENT_SECRET': process.env.ML_CLIENT_SECRET,
 };
 
 console.log('💉 Injecting secrets from .env into deploy/Code.gs...');

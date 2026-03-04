@@ -230,6 +230,15 @@ body {
   color: var(--color-danger);
 }
 
+.action-btn.ml:hover {
+  background: rgba(255, 230, 0, 0.15);
+  color: #d4ac0d;
+}
+
+.action-btn.ml.published {
+  color: #d4ac0d;
+}
+
 .action-btn svg {
   pointer-events: none;
 }
