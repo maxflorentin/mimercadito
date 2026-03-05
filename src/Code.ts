@@ -609,18 +609,21 @@ function getRequiredMLAttributes(categoryId: string, productName: string, token:
 
     const attributes: any[] = [];
 
+    // IDs de atributos de variación que no queremos auto-completar con valores random
+    const skipIds = new Set(["COLOR", "COLOR_SECONDARY_COLOR", "SIZE", "ALPHANUMERIC_SIZE"]);
+
     for (const attr of allAttrs) {
-      // Solo procesar atributos requeridos o que ML exige al publicar
       const isRequired = attr.tags && (attr.tags.required || attr.tags.catalog_required);
       if (!isRequired) continue;
 
+      // Skipear atributos de variación (color, talle) — ML no los exige si no hay variaciones
+      if (skipIds.has(attr.id) || (attr.tags && attr.tags.allow_variations)) continue;
+
       const attrEntry: any = { id: attr.id };
 
-      // Si tiene valores permitidos, usar el primero como default
       if (attr.values && attr.values.length > 0) {
-        // Intentar usar "Genérica" / "Otro" si existe, sino el primero
         const generic = attr.values.find((v: any) =>
-          /genér|generi|otro|other|no aplic/i.test(v.name)
+          /genér|generi|otro|other|no aplic|única|unico|universal/i.test(v.name)
         );
         attrEntry.value_id = generic ? generic.id : attr.values[0].id;
       } else if (attr.value_type === "string") {
