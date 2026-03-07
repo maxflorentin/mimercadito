@@ -1,19 +1,15 @@
 # Dependencies
 node_modules/
 
-# Build and production artifacts
-build/
-deploy/
-.clasp.json
+# Build output
+dist/
+
+# Environment
+.env
+.env.*
 
 # Logs
-logs
 *.log
 
-# OS generated files
+# OS
 .DS_Store
-.env
-config.js
-
-# Preview folder (if used only for local testing)
-# preview/

@@ -1,0 +1,28 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isAuthorized() {
+      return request.auth != null &&
+             request.auth.token.email in [
+               'macsee13@gmail.com',
+               'romi.fndz87@gmail.com'
+             ];
+    }
+
+    match /products/{productId} {
+      allow read: if isAuthorized();
+      allow create: if isAuthorized()
+                    && request.resource.data.listPrice is number
+                    && request.resource.data.listPrice > 0
+                    && request.resource.data.createdBy == request.auth.uid;
+      allow update: if isAuthorized()
+                    && request.resource.data.createdBy == resource.data.createdBy;
+      allow delete: if isAuthorized();
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

@@ -1,17 +1,20 @@
 {
   "name": "mimercadito",
-  "version": "1.0.0",
-  "description": "Premium Inventory System - miMercadito",
+  "version": "2.0.0",
+  "private": true,
+  "type": "module",
   "scripts": {
-    "typecheck": "tsc --noEmit",
-    "build": "tsc",
-    "deploy": "npm run build && mkdir -p deploy && echo '<style>' > deploy/theme.html && cat style.css >> deploy/theme.html && echo '</style>' >> deploy/theme.html && cp appsscript.json index.html deploy/ && cp build/Code.js deploy/Code.gs && node scripts/inject-secrets.js && clasp push",
-    "preview": "npx serve preview -p 3000",
-    "dev": "npx serve preview -p 3000"
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "firebase": "^12.10.0"
   },
   "devDependencies": {
-    "@types/google-apps-script": "^1.0.83",
-    "dotenv": "^17.3.1",
-    "typescript": "^5.3.3"
+    "typescript": "^5.9.3",
+    "vite": "^7.3.1",
+    "vite-plugin-pwa": "^1.2.0"
   }
 }
