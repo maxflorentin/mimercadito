@@ -12,7 +12,12 @@
       "Bash(npx firebase:*)",
       "Bash(npx:*)",
       "Bash(git status:*)",
-      "Bash(npm install:*)"
+      "Bash(npm install:*)",
+      "Bash(brew list:*)",
+      "Bash(gsutil ls:*)",
+      "Bash(gsutil:*)",
+      "Bash(gcloud auth:*)",
+      "Bash(gcloud storage:*)"
     ]
   }
 }
