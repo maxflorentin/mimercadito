@@ -1,0 +1,16 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /products/{allPaths=**} {
+      allow read: if true;
+      allow write: if request.auth != null
+                   && request.auth.token.email in [
+                     'macsee13@gmail.com',
+                     'romi.fndz87@gmail.com'
+                   ];
+    }
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}
