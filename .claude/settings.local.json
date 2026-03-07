@@ -11,7 +11,8 @@
       "Bash(timeout 5 npx vite:*)",
       "Bash(npx firebase:*)",
       "Bash(npx:*)",
-      "Bash(git status:*)"
+      "Bash(git status:*)",
+      "Bash(npm install:*)"
     ]
   }
 }

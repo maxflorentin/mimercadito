@@ -1,4 +1,5 @@
 import { subscribeProducts, markSold, archiveProduct, reactivateProduct } from '../lib/products';
+import { mlPublish, mlToggle, mlGetAuthUrl, mlCheckAuth } from '../lib/ml';
 import { showToast } from '../lib/toast';
 import { esc } from '../lib/sanitize';
 import type { Product } from '../lib/types';
@@ -53,6 +54,9 @@ function productCard(p: Product): string {
       </div>
       <div class="product-card-actions">
         ${p.status === 'available' ? `
+          ${!p.mlId ? `<button class="btn btn-sm btn-ml action-ml-publish">Publicar ML</button>` : ''}
+          ${p.mlId && p.mlStatus === 'active' ? `<button class="btn btn-sm btn-ml-outline action-ml-pause">Pausar ML</button>` : ''}
+          ${p.mlId && p.mlStatus === 'paused' ? `<button class="btn btn-sm btn-ml action-ml-activate">Reactivar ML</button>` : ''}
           <button class="btn btn-sm btn-success action-sell">Vender</button>
           <button class="btn btn-sm btn-secondary action-archive">Archivar</button>
           <button class="btn btn-sm btn-secondary action-edit">Editar</button>
@@ -147,6 +151,7 @@ export function renderDashboard(container: HTMLElement): () => void {
 
     container.innerHTML = `
       ${currentTab === 'available' ? renderStats(allProducts) : ''}
+      <div id="ml-auth-banner"></div>
       <div class="filter-row">
         <div class="status-tabs">
           <button class="status-tab ${currentTab === 'available' ? 'active' : ''}" data-tab="available">Disponibles</button>
@@ -180,6 +185,38 @@ export function renderDashboard(container: HTMLElement): () => void {
       const product = allProducts.find((p) => p.id === id);
       if (!product) return;
 
+      card.querySelector('.action-ml-publish')?.addEventListener('click', async (e) => {
+        const btn = e.target as HTMLButtonElement;
+        btn.disabled = true;
+        btn.textContent = 'Publicando...';
+        try {
+          const result = await mlPublish(id);
+          showToast(`Publicado: ${result.mlId}`);
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : 'Error ML';
+          showToast(msg, 'error');
+        }
+      });
+      card.querySelector('.action-ml-pause')?.addEventListener('click', async (e) => {
+        const btn = e.target as HTMLButtonElement;
+        btn.disabled = true;
+        try {
+          await mlToggle(id, product.mlId!, 'paused');
+          showToast('Publicacion pausada');
+        } catch {
+          showToast('Error al pausar', 'error');
+        }
+      });
+      card.querySelector('.action-ml-activate')?.addEventListener('click', async (e) => {
+        const btn = e.target as HTMLButtonElement;
+        btn.disabled = true;
+        try {
+          await mlToggle(id, product.mlId!, 'active');
+          showToast('Publicacion reactivada');
+        } catch {
+          showToast('Error al reactivar', 'error');
+        }
+      });
       card.querySelector('.action-sell')?.addEventListener('click', () => showSellModal(product));
       card.querySelector('.action-archive')?.addEventListener('click', async () => {
         try {
@@ -212,6 +249,32 @@ export function renderDashboard(container: HTMLElement): () => void {
   }
 
   subscribe();
+
+  // Check ML auth
+  mlCheckAuth()
+    .then((authorized) => {
+      const banner = document.getElementById('ml-auth-banner');
+      if (!banner) return;
+      if (!authorized) {
+        banner.innerHTML = `
+          <div class="card" style="background:#fff8e1;border-left:4px solid #ff9500;padding:12px 16px">
+            <strong>ML no autorizado</strong>
+            <p class="hint" style="margin:4px 0 8px">Autorizá tu cuenta de Mercado Libre para publicar productos.</p>
+            <button class="btn btn-sm btn-ml" id="ml-auth-btn">Autorizar ML</button>
+          </div>
+        `;
+        document.getElementById('ml-auth-btn')?.addEventListener('click', async () => {
+          try {
+            const url = await mlGetAuthUrl();
+            window.open(url, '_blank');
+          } catch (err) {
+            const msg = err instanceof Error ? err.message : 'Error';
+            showToast(msg, 'error');
+          }
+        });
+      }
+    })
+    .catch(() => { /* functions not deployed yet */ });
 
   return () => {
     if (unsub) unsub();

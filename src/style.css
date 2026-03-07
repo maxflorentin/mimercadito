@@ -163,6 +163,17 @@ body {
   font-size: 13px;
 }
 
+.btn-ml {
+  background: var(--color-warning);
+  color: #fff;
+}
+
+.btn-ml-outline {
+  background: transparent;
+  border: 1.5px solid var(--color-warning);
+  color: var(--color-warning);
+}
+
 /* === Forms === */
 .form-group {
   margin-bottom: 16px;

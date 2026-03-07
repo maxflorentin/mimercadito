@@ -45,12 +45,16 @@ jobs:
       - id: deploy
         uses: actions/deploy-pages@v4
 
-  deploy-rules:
+  deploy-firebase:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: cd functions && npm ci
       - uses: w9jds/firebase-action@master
         with:
-          args: deploy --only firestore:rules
+          args: deploy --only firestore:rules,functions
         env:
           FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
