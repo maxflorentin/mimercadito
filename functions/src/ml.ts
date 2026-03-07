@@ -96,12 +96,13 @@ async function mlFetch(path: string, options: RequestInit = {}): Promise<Respons
 // --- Category prediction ---
 
 async function predictCategory(title: string): Promise<string> {
+  const FALLBACK = "MLA1953"; // Otros > Otros
   const res = await mlFetch(
     `/sites/MLA/category_predictor/predict?title=${encodeURIComponent(title)}`
   );
-  if (!res.ok) return "MLA1055"; // fallback: Otros
+  if (!res.ok) return FALLBACK;
   const data = await res.json();
-  return data.id || data[0]?.id || "MLA1055";
+  return data.id || data[0]?.id || FALLBACK;
 }
 
 // --- Required attributes ---
@@ -120,36 +121,34 @@ interface MLAttribute {
   default_value?: string;
 }
 
-async function getRequiredAttributes(categoryId: string): Promise<Record<string, string>> {
+async function getRequiredAttributes(categoryId: string): Promise<{ resolved: Record<string, string>; allRequired: MLAttribute[] }> {
   const res = await mlFetch(`/categories/${categoryId}/attributes`);
-  if (!res.ok) return {};
+  if (!res.ok) return { resolved: {}, allRequired: [] };
   const attrs: MLAttribute[] = await res.json();
-  const result: Record<string, string> = {};
+  const allRequired = attrs.filter((a) => a.tags && a.tags.required);
+  const resolved: Record<string, string> = {};
 
-  for (const attr of attrs) {
-    if (!attr.tags || !attr.tags.required) continue;
+  for (const attr of allRequired) {
     if (SKIP_ATTR_IDS.has(attr.id)) continue;
-    if (attr.tags.allow_variations) continue;
+    if (attr.tags?.allow_variations) continue;
 
     if (attr.default_value) {
-      result[attr.id] = attr.default_value;
+      resolved[attr.id] = attr.default_value;
       continue;
     }
 
     if (attr.values && attr.values.length > 0) {
-      // Try to find a generic/not specified value
       const generic = attr.values.find((v) =>
         /gen[eé]ric|no.?aplic|no.?especif|sin.?especif|uni(versal|sex)/i.test(v.name)
       );
       if (generic) {
-        result[attr.id] = generic.id;
+        resolved[attr.id] = generic.id;
       } else if (attr.values.length === 1) {
-        result[attr.id] = attr.values[0].id;
+        resolved[attr.id] = attr.values[0].id;
       }
-      // Skip if no generic and multiple values (avoid wrong guess)
     }
   }
-  return result;
+  return { resolved, allRequired };
 }
 
 // --- Publish ---
@@ -168,18 +167,31 @@ export async function publishProduct(
   product: ProductData
 ): Promise<{ mlId: string; mlLink: string }> {
   const categoryId = await predictCategory(product.name);
-  const reqAttrs = await getRequiredAttributes(categoryId);
+  const { resolved: reqAttrs, allRequired: allRequiredAttrs } = await getRequiredAttributes(categoryId);
 
-  const attributes = Object.entries(reqAttrs).map(([id, value]) => ({
+  const attributes: Record<string, unknown>[] = Object.entries(reqAttrs).map(([id, value]) => ({
     id,
     value_id: value,
   }));
+
+  // Fill any still-missing required attributes with generic text
+  const filledIds = new Set(attributes.map((a) => a.id as string));
+  for (const attr of allRequiredAttrs) {
+    if (!filledIds.has(attr.id) && !SKIP_ATTR_IDS.has(attr.id) && !attr.tags?.allow_variations) {
+      if (attr.value_type === "string" || attr.value_type === "number_unit") {
+        attributes.push({ id: attr.id, value_name: "No especificado" });
+      }
+    }
+  }
 
   // Add ITEM_CONDITION
   attributes.push({
     id: "ITEM_CONDITION",
     value_id: product.condition >= 9 ? "2230284" : "2230581", // Nuevo : Usado
   });
+
+  const hasPicture = !!product.photoUrl;
+  const listingType = hasPicture ? "gold_special" : "gold_pro";
 
   const body: Record<string, unknown> = {
     family_name: product.name,
@@ -188,7 +200,7 @@ export async function publishProduct(
     currency_id: "ARS",
     available_quantity: 1,
     buying_mode: "buy_it_now",
-    listing_type_id: "gold_special",
+    listing_type_id: listingType,
     condition: product.condition >= 9 ? "new" : "used",
     description: { plain_text: product.notes || product.name },
     shipping: {
@@ -199,8 +211,7 @@ export async function publishProduct(
     attributes,
   };
 
-  // Upload photo to ML if we have one
-  if (product.photoUrl) {
+  if (hasPicture) {
     body.pictures = [{ source: product.photoUrl }];
   }
 
