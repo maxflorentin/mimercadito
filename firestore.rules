@@ -10,6 +10,34 @@ service cloud.firestore {
              ];
     }
 
+    // === misGastos ===
+    match /expenses/{expenseId} {
+      allow read: if isAuthorized();
+      allow create: if isAuthorized()
+                    && request.resource.data.amount is number
+                    && request.resource.data.amount > 0
+                    && request.resource.data.createdBy == request.auth.uid;
+      allow update: if isAuthorized()
+                    && request.resource.data.amount is number
+                    && request.resource.data.amount > 0
+                    && request.resource.data.createdBy == resource.data.createdBy;
+      allow delete: if isAuthorized();
+    }
+
+    match /incomes/{incomeId} {
+      allow read: if isAuthorized();
+      allow create: if isAuthorized()
+                    && request.resource.data.amount is number
+                    && request.resource.data.amount > 0
+                    && request.resource.data.createdBy == request.auth.uid;
+      allow update: if isAuthorized()
+                    && request.resource.data.amount is number
+                    && request.resource.data.amount > 0
+                    && request.resource.data.createdBy == resource.data.createdBy;
+      allow delete: if isAuthorized();
+    }
+
+    // === miMercadito ===
     match /products/{productId} {
       allow read: if isAuthorized();
       allow create: if isAuthorized()
@@ -19,6 +47,12 @@ service cloud.firestore {
       allow update: if isAuthorized()
                     && request.resource.data.createdBy == resource.data.createdBy;
       allow delete: if isAuthorized();
+    }
+
+    // config collection for ML tokens (written by Cloud Functions)
+    match /config/{docId} {
+      allow read: if isAuthorized();
+      allow write: if false;
     }
 
     match /{document=**} {
