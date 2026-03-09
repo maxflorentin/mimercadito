@@ -237,6 +237,67 @@ select.input {
   margin-bottom: 8px;
 }
 
+.smart-tabs {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.smart-tab {
+  padding: 6px 14px;
+  border-radius: 99px;
+  font-size: 13px;
+  font-weight: 500;
+  font-family: var(--font);
+  border: 1.5px solid var(--color-border);
+  background: var(--color-card);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.smart-tab.active {
+  background: var(--color-primary);
+  color: #fff;
+  border-color: var(--color-primary);
+}
+
+.smart-panel {
+  margin-bottom: 4px;
+}
+
+.photo-drop {
+  border: 2px dashed var(--color-border);
+  border-radius: var(--radius);
+  padding: 24px;
+  cursor: pointer;
+  transition: border-color 0.2s;
+  text-align: center;
+}
+
+.photo-drop:hover {
+  border-color: var(--color-primary);
+}
+
+.photo-drop-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.photo-drop-icon {
+  font-size: 32px;
+}
+
+.photo-drop-preview {
+  width: 100%;
+  max-width: 240px;
+  max-height: 200px;
+  object-fit: contain;
+  border-radius: var(--radius-sm);
+}
+
 .smart-input-row {
   display: flex;
   gap: 8px;

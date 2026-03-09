@@ -98,6 +98,60 @@ function validateParsed(data: ParsedProduct): ParsedProduct | null {
   return data;
 }
 
+export async function parseProductPhoto(file: File): Promise<ParsedProduct | null> {
+  const base64 = await fileToBase64(file);
+  const mimeType = file.type || 'image/jpeg';
+
+  const prompt = `Analizá esta foto de un producto para venta en Argentina.
+Categorías válidas: ${CATEGORIES.join(', ')}.
+
+Identificá:
+- Qué producto es (nombre descriptivo para publicar en MercadoLibre)
+- Categoría
+- Condición estimada (1-10, donde 10 es nuevo/sellado)
+- Precio de lista estimado en ARS (basado en producto y condición)
+- floorPrice = ~80% del listPrice
+- Notas: marca, modelo, detalles relevantes que veas
+
+Respondé SOLO con JSON:
+{"name": "string", "category": "string", "condition": number, "listPrice": number, "floorPrice": number, "costPrice": 0, "notes": "string"}`;
+
+  try {
+    const result = await model.generateContent({
+      contents: [{
+        role: 'user',
+        parts: [
+          { inlineData: { mimeType, data: base64 } },
+          { text: prompt },
+        ],
+      }],
+      generationConfig: { temperature: 0.1, maxOutputTokens: 500 },
+    });
+
+    const text = result.response.text();
+    const jsonMatch = text.match(/\{[\s\S]*?\}/);
+    if (!jsonMatch) return null;
+
+    const parsed: ParsedProduct = JSON.parse(jsonMatch[0]);
+    return validateParsed(parsed);
+  } catch {
+    return null;
+  }
+}
+
+function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result as string;
+      // Remove data:image/...;base64, prefix
+      resolve(result.split(',')[1]);
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
 export async function parseProductInput(input: string): Promise<ParsedProduct | null> {
   try {
     const prompt = `Sos un parser de productos para venta en Argentina. Dada la entrada del usuario, extraé los datos del producto.

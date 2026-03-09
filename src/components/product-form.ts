@@ -1,5 +1,5 @@
 import { addProduct, uploadProductPhoto, updateProduct } from '../lib/products';
-import { parseProductInput } from '../lib/gemini';
+import { parseProductInput, parseProductPhoto } from '../lib/gemini';
 import { showToast } from '../lib/toast';
 import { CATEGORIES } from '../lib/types';
 import { esc } from '../lib/sanitize';
@@ -21,11 +21,28 @@ export async function renderProductForm(container: HTMLElement, editId?: string)
 
       ${!editing ? `
         <div class="smart-input-section">
-          <div class="smart-input-row">
-            <input class="input" id="smart-input" placeholder='Ej: "pantalon levis nuevo 80k"' />
-            <button class="btn btn-primary" id="smart-parse">AI</button>
+          <p class="label">Carga rapida con AI</p>
+          <div class="smart-tabs">
+            <button class="smart-tab active" data-mode="photo">Por foto</button>
+            <button class="smart-tab" data-mode="text">Por texto</button>
           </div>
-          <p class="hint">Gemini parsea nombre, precio, categoria y condicion</p>
+          <div id="smart-photo" class="smart-panel">
+            <div class="photo-drop" id="photo-drop">
+              <input type="file" id="smart-photo-input" accept="image/*" hidden />
+              <div class="photo-drop-content" id="photo-drop-content">
+                <span class="photo-drop-icon">📷</span>
+                <span>Seleccionar foto</span>
+                <span class="hint">Gemini analiza la foto y completa los datos</span>
+              </div>
+            </div>
+          </div>
+          <div id="smart-text" class="smart-panel" style="display:none">
+            <div class="smart-input-row">
+              <input class="input" id="smart-input" placeholder='Ej: "pantalon levis nuevo 80k"' />
+              <button class="btn btn-primary" id="smart-parse">AI</button>
+            </div>
+            <p class="hint">Gemini parsea nombre, precio, categoria y condicion</p>
+          </div>
         </div>
         <hr style="border:none;border-top:1px solid var(--color-border);margin:16px 0" />
       ` : ''}
@@ -77,7 +94,82 @@ export async function renderProductForm(container: HTMLElement, editId?: string)
     </div>
   `;
 
-  // Smart input
+  // Helper to fill form fields from parsed data
+  function fillForm(parsed: { name: string; category: string; condition: number; listPrice: number; floorPrice: number; costPrice: number; notes: string }) {
+    (document.getElementById('f-name') as HTMLInputElement).value = parsed.name;
+    (document.getElementById('f-category') as HTMLSelectElement).value = parsed.category;
+    (document.getElementById('f-condition') as HTMLInputElement).value = String(parsed.condition);
+    (document.getElementById('f-list') as HTMLInputElement).value = String(parsed.listPrice);
+    (document.getElementById('f-floor') as HTMLInputElement).value = String(parsed.floorPrice);
+    (document.getElementById('f-cost') as HTMLInputElement).value = String(parsed.costPrice);
+    (document.getElementById('f-notes') as HTMLInputElement).value = parsed.notes;
+  }
+
+  // Smart tabs
+  container.querySelectorAll('.smart-tab').forEach((tab) => {
+    tab.addEventListener('click', () => {
+      container.querySelectorAll('.smart-tab').forEach((t) => t.classList.remove('active'));
+      tab.classList.add('active');
+      const mode = (tab as HTMLElement).dataset.mode;
+      const photoPanel = document.getElementById('smart-photo');
+      const textPanel = document.getElementById('smart-text');
+      if (photoPanel) photoPanel.style.display = mode === 'photo' ? '' : 'none';
+      if (textPanel) textPanel.style.display = mode === 'text' ? '' : 'none';
+    });
+  });
+
+  // Smart photo input
+  const photoDrop = document.getElementById('photo-drop');
+  const photoInput = document.getElementById('smart-photo-input') as HTMLInputElement | null;
+  if (photoDrop && photoInput) {
+    photoDrop.addEventListener('click', () => photoInput.click());
+    photoInput.addEventListener('change', async () => {
+      const file = photoInput.files?.[0];
+      if (!file) return;
+
+      // Show preview
+      const dropContent = document.getElementById('photo-drop-content')!;
+      const previewUrl = URL.createObjectURL(file);
+      dropContent.innerHTML = `
+        <img src="${previewUrl}" class="photo-drop-preview" />
+        <span class="hint">Analizando con Gemini...</span>
+      `;
+
+      try {
+        const parsed = await parseProductPhoto(file);
+        if (parsed) {
+          fillForm(parsed);
+          // Also set the photo in the form's file input
+          const formPhoto = document.getElementById('f-photo') as HTMLInputElement;
+          const dt = new DataTransfer();
+          dt.items.add(file);
+          formPhoto.files = dt.files;
+          dropContent.innerHTML = `
+            <img src="${previewUrl}" class="photo-drop-preview" />
+            <span class="hint" style="color:var(--color-success)">Datos completados con AI</span>
+          `;
+          showToast('Foto analizada con AI');
+        } else {
+          dropContent.innerHTML = `
+            <img src="${previewUrl}" class="photo-drop-preview" />
+            <span class="hint" style="color:var(--color-danger)">No se pudo analizar. Completá manualmente.</span>
+          `;
+          // Still set the photo
+          const formPhoto = document.getElementById('f-photo') as HTMLInputElement;
+          const dt = new DataTransfer();
+          dt.items.add(file);
+          formPhoto.files = dt.files;
+        }
+      } catch {
+        dropContent.innerHTML = `
+          <img src="${previewUrl}" class="photo-drop-preview" />
+          <span class="hint" style="color:var(--color-danger)">Error de AI. Completá manualmente.</span>
+        `;
+      }
+    });
+  }
+
+  // Smart text input
   const smartBtn = document.getElementById('smart-parse');
   const smartInput = document.getElementById('smart-input') as HTMLInputElement | null;
   if (smartBtn && smartInput) {
@@ -89,13 +181,7 @@ export async function renderProductForm(container: HTMLElement, editId?: string)
       try {
         const parsed = await parseProductInput(text);
         if (parsed) {
-          (document.getElementById('f-name') as HTMLInputElement).value = parsed.name;
-          (document.getElementById('f-category') as HTMLSelectElement).value = parsed.category;
-          (document.getElementById('f-condition') as HTMLInputElement).value = String(parsed.condition);
-          (document.getElementById('f-list') as HTMLInputElement).value = String(parsed.listPrice);
-          (document.getElementById('f-floor') as HTMLInputElement).value = String(parsed.floorPrice);
-          (document.getElementById('f-cost') as HTMLInputElement).value = String(parsed.costPrice);
-          (document.getElementById('f-notes') as HTMLInputElement).value = parsed.notes;
+          fillForm(parsed);
           showToast('Parseado con AI');
         } else {
           showToast('No se pudo parsear', 'error');

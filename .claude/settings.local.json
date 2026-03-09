@@ -17,7 +17,9 @@
       "Bash(gsutil ls:*)",
       "Bash(gsutil:*)",
       "Bash(gcloud auth:*)",
-      "Bash(gcloud storage:*)"
+      "Bash(gcloud storage:*)",
+      "Bash(printf:*)",
+      "Bash(curl:*)"
     ]
   }
 }
