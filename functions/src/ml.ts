@@ -178,6 +178,49 @@ async function getRequiredAttributes(categoryId: string): Promise<{ resolved: Re
   return { resolved, allRequired };
 }
 
+// --- Upload picture to ML ---
+
+async function uploadPictureToML(photoUrl: string): Promise<string> {
+  // Download image from Firebase Storage
+  const imgRes = await fetch(photoUrl);
+  if (!imgRes.ok) throw new Error(`No se pudo descargar la foto (${imgRes.status})`);
+  const imgBuffer = Buffer.from(await imgRes.arrayBuffer());
+  const contentType = imgRes.headers.get("content-type") || "image/jpeg";
+
+  // Upload to ML pictures endpoint
+  const token = await getValidToken();
+  const boundary = "----MLUpload" + Date.now();
+  const ext = contentType.includes("png") ? "png" : "jpg";
+  const filename = `product.${ext}`;
+
+  const bodyParts = [
+    `--${boundary}\r\n`,
+    `Content-Disposition: form-data; name="file"; filename="${filename}"\r\n`,
+    `Content-Type: ${contentType}\r\n\r\n`,
+  ];
+  const header = Buffer.from(bodyParts.join(""));
+  const footer = Buffer.from(`\r\n--${boundary}--\r\n`);
+  const body = Buffer.concat([header, imgBuffer, footer]);
+
+  const res = await fetch(`${ML_API}/pictures/items/upload`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": `multipart/form-data; boundary=${boundary}`,
+    },
+    body,
+  });
+
+  const data = await res.json();
+  if (!res.ok) {
+    console.error("ML picture upload error:", JSON.stringify(data));
+    throw new Error(`No se pudo subir la foto a ML (${res.status})`);
+  }
+
+  console.log("ML picture uploaded:", data.id);
+  return data.id;
+}
+
 // --- Publish ---
 
 interface ProductData {
@@ -196,6 +239,9 @@ export async function publishProduct(
   if (!product.photoUrl) {
     throw new Error("Se requiere una foto para publicar en ML");
   }
+
+  // Upload photo to ML first
+  const pictureId = await uploadPictureToML(product.photoUrl);
 
   const categoryId = await predictCategory(product.name);
   const { resolved: reqAttrs, allRequired: allRequiredAttrs } = await getRequiredAttributes(categoryId);
@@ -230,7 +276,7 @@ export async function publishProduct(
     listing_type_id: "gold_special",
     condition: product.condition >= 9 ? "new" : "used",
     description: { plain_text: product.notes || product.name },
-    pictures: [{ source: product.photoUrl }],
+    pictures: [{ id: pictureId }],
     shipping: {
       mode: "me2",
       local_pick_up: true,
