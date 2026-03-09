@@ -19,7 +19,11 @@
       "Bash(gcloud auth:*)",
       "Bash(gcloud storage:*)",
       "Bash(printf:*)",
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "Bash(git add:*)",
+      "Bash(git push:*)",
+      "Bash(node:*)",
+      "Bash(GOOGLE_APPLICATION_CREDENTIALS=\"\" GCLOUD_PROJECT=misgastos-rm node:*)"
     ]
   }
 }

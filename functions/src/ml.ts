@@ -94,13 +94,21 @@ async function mlFetch(path: string, options: RequestInit = {}): Promise<Respons
 // --- Category prediction ---
 
 async function predictCategory(title: string): Promise<string> {
-  const res = await mlFetch(
-    `/sites/MLA/category_predictor/predict?title=${encodeURIComponent(title)}`
+  // Category predictor is a public endpoint — no auth needed
+  const res = await fetch(
+    `${ML_API}/sites/MLA/category_predictor/predict?title=${encodeURIComponent(title)}`
   );
-  if (!res.ok) throw new Error("No se pudo predecir la categoría de ML");
+  if (!res.ok) {
+    const text = await res.text();
+    console.error("Category predictor error:", res.status, text);
+    throw new Error(`No se pudo predecir la categoría de ML (${res.status})`);
+  }
   const data = await res.json();
   const catId = data.id || data[0]?.id;
-  if (!catId) throw new Error("ML no devolvió categoría para este producto");
+  if (!catId) {
+    console.error("Category predictor empty response:", JSON.stringify(data));
+    throw new Error("ML no devolvió categoría para este producto");
+  }
 
   // Verify it's a leaf category
   const catRes = await fetch(`${ML_API}/categories/${catId}`);
@@ -238,7 +246,7 @@ export async function publishProduct(
 
   const data = await res.json();
   if (!res.ok) {
-    // Extract readable error
+    console.error("ML publish error:", JSON.stringify(data));
     const causes = data.cause || [];
     const errors = causes
       .filter((c: { type: string }) => c.type === "error")
