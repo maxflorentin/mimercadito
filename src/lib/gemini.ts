@@ -1,9 +1,58 @@
-import { getAI, getGenerativeModel, GoogleAIBackend } from 'firebase/ai';
-import { app } from './firebase';
 import { CATEGORIES } from './types';
 
-const ai = getAI(app, { backend: new GoogleAIBackend() });
-const model = getGenerativeModel(ai, { model: 'gemini-2.5-flash' });
+const ML_API = 'https://api.mercadolibre.com';
+
+// Map ML top-level category names to our app categories
+const ML_CATEGORY_MAP: Record<string, string> = {
+  'Ropa y Accesorios': 'Fashion',
+  'Calzados': 'Fashion',
+  'Celulares y Telefonía': 'Electronics',
+  'Computación': 'Electronics',
+  'Electrónica, Audio y Video': 'Electronics',
+  'Consolas y Videojuegos': 'Electronics',
+  'Cámaras y Accesorios': 'Electronics',
+  'Hogar, Muebles y Jardín': 'Home',
+  'Electrodomésticos y Aires Ac.': 'Home',
+  'Deportes y Fitness': 'Sports',
+  'Juegos y Juguetes': 'Toys',
+  'Libros, Revistas y Comics': 'Books',
+  'Herramientas': 'Tools',
+  'Accesorios para Vehículos': 'Auto',
+  'Autos, Motos y Otros': 'Auto',
+};
+
+async function predictCategory(title: string): Promise<string> {
+  try {
+    const res = await fetch(
+      `${ML_API}/sites/MLA/category_predictor/predict?title=${encodeURIComponent(title)}`
+    );
+    if (!res.ok) return 'Other';
+    const data = await res.json();
+    const path = data.path_from_root || [];
+    if (path.length > 0) {
+      const topName: string = path[0].name;
+      return ML_CATEGORY_MAP[topName] || 'Other';
+    }
+    return 'Other';
+  } catch {
+    return 'Other';
+  }
+}
+
+// Local keyword fallback for category
+const KEYWORD_CATEGORIES: Record<string, string> = {
+  pantalon: 'Fashion', remera: 'Fashion', campera: 'Fashion', zapatilla: 'Fashion',
+  zapato: 'Fashion', vestido: 'Fashion', camisa: 'Fashion', short: 'Fashion',
+  jean: 'Fashion', buzo: 'Fashion', ropa: 'Fashion', cartera: 'Fashion',
+  jordan: 'Fashion', nike: 'Fashion', adidas: 'Fashion',
+  celular: 'Electronics', notebook: 'Electronics', tablet: 'Electronics',
+  auricular: 'Electronics', parlante: 'Electronics', cargador: 'Electronics',
+  silla: 'Home', mesa: 'Home', lampara: 'Home', espejo: 'Home',
+  pelota: 'Sports', bici: 'Sports', raqueta: 'Sports',
+  juguete: 'Toys', muneca: 'Toys', lego: 'Toys',
+  libro: 'Books', manual: 'Books',
+  taladro: 'Tools', destornillador: 'Tools',
+};
 
 interface ParsedProduct {
   name: string;
@@ -15,172 +64,71 @@ interface ParsedProduct {
   notes: string;
 }
 
-function localParse(input: string): ParsedProduct | null {
-  const lower = input.toLowerCase().trim();
+function extractPrice(text: string): number {
+  const kMatch = text.match(/(\d+[\.,]?\d*)\s*k\b/i);
+  if (kMatch) return parseFloat(kMatch[1].replace(',', '.')) * 1000;
 
-  // Extract price: "80k" or "80000"
-  let price = 0;
-  const kMatch = lower.match(/(\d+[\.,]?\d*)\s*k\b/i);
-  if (kMatch) {
-    price = parseFloat(kMatch[1].replace(',', '.')) * 1000;
-  } else {
-    const numMatch = lower.match(/(\d{1,3}(?:[\.,]\d{3})+)/);
-    if (numMatch) {
-      price = parseFloat(numMatch[1].replace(/\./g, '').replace(',', '.'));
-    } else {
-      const simpleMatch = lower.match(/(\d+)/);
-      if (simpleMatch) price = parseInt(simpleMatch[1], 10);
-    }
-  }
+  const dotMatch = text.match(/(\d{1,3}(?:\.\d{3})+)/);
+  if (dotMatch) return parseFloat(dotMatch[1].replace(/\./g, ''));
 
-  if (price <= 0) return null;
+  const numMatch = text.match(/\b(\d{4,})\b/);
+  if (numMatch) return parseInt(numMatch[1], 10);
 
-  // Remove price from input to get name
-  let name = lower
+  return 0;
+}
+
+function extractCondition(text: string): number {
+  const lower = text.toLowerCase();
+  if (/\bnuev[oa]s?\b|sellad|etiqueta|sin uso/i.test(lower)) return 10;
+  if (/\busad[oa]s?\b|gastado/i.test(lower)) return 6;
+  return 7;
+}
+
+function extractName(text: string): string {
+  let name = text
     .replace(/\d+[\.,]?\d*\s*k\b/gi, '')
-    .replace(/\d+/g, '')
+    .replace(/\b\d{4,}\b/g, '')
+    .replace(/\d{1,3}(?:\.\d{3})+/g, '')
     .replace(/\$/g, '')
+    .replace(/\b(nuev[oa]s?|usad[oa]s?|sellad[oa]?|sin uso)\b/gi, '')
     .trim();
 
-  // Capitalize words
-  name = name
-    .split(' ')
+  return name
+    .split(/\s+/)
     .filter(Boolean)
-    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-    .join(' ');
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+    .join(' ') || 'Producto';
+}
 
-  // Guess condition from keywords
-  let condition = 7;
-  if (/nuev|sellad|etiqueta|sin uso/i.test(lower)) condition = 10;
-  if (/usado|gastado/i.test(lower)) condition = 5;
-
-  // Guess category
-  let category = 'Other';
-  const categoryMap: Record<string, string> = {
-    pantalon: 'Fashion', remera: 'Fashion', campera: 'Fashion', zapatilla: 'Fashion',
-    zapato: 'Fashion', vestido: 'Fashion', camisa: 'Fashion', short: 'Fashion',
-    jean: 'Fashion', buzo: 'Fashion', ropa: 'Fashion', cartera: 'Fashion',
-    celular: 'Electronics', notebook: 'Electronics', tablet: 'Electronics',
-    auricular: 'Electronics', parlante: 'Electronics', cargador: 'Electronics',
-    silla: 'Home', mesa: 'Home', lampara: 'Home', espejo: 'Home',
-    pelota: 'Sports', bici: 'Sports', raqueta: 'Sports',
-    juguete: 'Toys', muneca: 'Toys', lego: 'Toys',
-    libro: 'Books', manual: 'Books',
-    taladro: 'Tools', destornillador: 'Tools',
-  };
-
-  for (const [keyword, cat] of Object.entries(categoryMap)) {
-    if (lower.includes(keyword)) {
-      category = cat;
-      break;
-    }
+function localCategoryFallback(text: string): string {
+  const lower = text.toLowerCase();
+  for (const [keyword, cat] of Object.entries(KEYWORD_CATEGORIES)) {
+    if (lower.includes(keyword)) return cat;
   }
-
-  return {
-    name: name || 'Producto',
-    category,
-    condition,
-    listPrice: price,
-    floorPrice: Math.round(price * 0.8),
-    costPrice: 0,
-    notes: '',
-  };
-}
-
-function validateParsed(data: ParsedProduct): ParsedProduct | null {
-  if (!data.listPrice || data.listPrice <= 0) return null;
-  if (!CATEGORIES.includes(data.category as (typeof CATEGORIES)[number])) data.category = 'Other';
-  data.name = (data.name || '').slice(0, 200);
-  if (!data.name) data.name = 'Producto';
-  if (!data.condition || data.condition < 1) data.condition = 7;
-  if (data.condition > 10) data.condition = 10;
-  if (!data.floorPrice) data.floorPrice = Math.round(data.listPrice * 0.8);
-  return data;
-}
-
-export async function parseProductPhoto(file: File): Promise<ParsedProduct | null> {
-  const base64 = await fileToBase64(file);
-  const mimeType = file.type || 'image/jpeg';
-
-  const prompt = `Analizá esta foto de un producto para venta en Argentina.
-Categorías válidas: ${CATEGORIES.join(', ')}.
-
-Identificá:
-- Qué producto es (nombre descriptivo para publicar en MercadoLibre)
-- Categoría
-- Condición estimada (1-10, donde 10 es nuevo/sellado)
-- Precio de lista estimado en ARS (basado en producto y condición)
-- floorPrice = ~80% del listPrice
-- Notas: marca, modelo, detalles relevantes que veas
-
-Respondé SOLO con JSON:
-{"name": "string", "category": "string", "condition": number, "listPrice": number, "floorPrice": number, "costPrice": 0, "notes": "string"}`;
-
-  try {
-    const result = await model.generateContent({
-      contents: [{
-        role: 'user',
-        parts: [
-          { inlineData: { mimeType, data: base64 } },
-          { text: prompt },
-        ],
-      }],
-      generationConfig: { temperature: 0.1, maxOutputTokens: 500 },
-    });
-
-    const text = result.response.text();
-    const jsonMatch = text.match(/\{[\s\S]*?\}/);
-    if (!jsonMatch) return null;
-
-    const parsed: ParsedProduct = JSON.parse(jsonMatch[0]);
-    return validateParsed(parsed);
-  } catch {
-    return null;
-  }
-}
-
-function fileToBase64(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      const result = reader.result as string;
-      // Remove data:image/...;base64, prefix
-      resolve(result.split(',')[1]);
-    };
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
+  return 'Other';
 }
 
 export async function parseProductInput(input: string): Promise<ParsedProduct | null> {
-  try {
-    const prompt = `Sos un parser de productos para venta en Argentina. Dada la entrada del usuario, extraé los datos del producto.
-Categorías válidas: ${CATEGORIES.join(', ')}.
+  const price = extractPrice(input);
+  const condition = extractCondition(input);
+  const name = extractName(input);
 
-Reglas:
-- Si dice "k" después de un número, multiplicá por 1000 (ej: "80k" = 80000)
-- Si dice "nuevo" o "con etiquetas", condition = 10
-- Si dice "usado", condition = 5-7 según contexto
-- floorPrice = ~80% del listPrice (precio mínimo aceptable)
-- costPrice = 0 si no se menciona
-
-Respondé SOLO con JSON:
-{"name": "string", "category": "string", "condition": number, "listPrice": number, "floorPrice": number, "costPrice": number, "notes": "string"}
-
-Entrada: "${input}"`;
-
-    const result = await model.generateContent({
-      contents: [{ role: 'user', parts: [{ text: prompt }] }],
-      generationConfig: { temperature: 0.1, maxOutputTokens: 300 },
-    });
-
-    const text = result.response.text();
-    const jsonMatch = text.match(/\{[\s\S]*?\}/);
-    if (!jsonMatch) throw new Error('No JSON');
-
-    const parsed: ParsedProduct = JSON.parse(jsonMatch[0]);
-    return validateParsed(parsed);
-  } catch {
-    return localParse(input);
+  // Try ML category predictor, fall back to keywords
+  let category = localCategoryFallback(input);
+  if (name && name !== 'Producto') {
+    const mlCat = await predictCategory(name);
+    if (mlCat !== 'Other') category = mlCat;
   }
+
+  if (!CATEGORIES.includes(category as (typeof CATEGORIES)[number])) category = 'Other';
+
+  return {
+    name,
+    category,
+    condition,
+    listPrice: price,
+    floorPrice: price ? Math.round(price * 0.8) : 0,
+    costPrice: 0,
+    notes: '',
+  };
 }
