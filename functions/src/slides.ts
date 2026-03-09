@@ -1,7 +1,7 @@
 import { google, type slides_v1 } from "googleapis";
 import * as admin from "firebase-admin";
 
-const PHONE_NUMBER = "5491158529858";
+const PHONE_NUMBER = "1124005532";
 
 type SlidesAPI = slides_v1.Slides;
 

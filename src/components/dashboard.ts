@@ -51,7 +51,7 @@ function productCard(p: Product): string {
       <div class="product-card-status">
         ${statusBadge(p)}
         ${p.mlLink ? `<a href="${esc(p.mlLink)}" target="_blank" class="ml-link">Ver en ML</a>` : ''}
-        ${p.mlLink ? `<a href="https://wa.me/?text=${encodeURIComponent(p.name + ' - ' + formatPrice(p.listPrice) + '\n' + p.mlLink)}" target="_blank" class="ml-link">Compartir</a>` : ''}
+        ${p.mlLink ? `<a href="https://wa.me/1124005532?text=${encodeURIComponent(p.name + ' - ' + formatPrice(p.listPrice) + '\n' + p.mlLink)}" target="_blank" class="ml-link">Compartir</a>` : ''}
       </div>
       <div class="product-card-actions">
         ${p.status === 'available' ? `
