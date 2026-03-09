@@ -353,6 +353,132 @@ export async function updateListing(
   }
 }
 
+// --- Import from ML ---
+
+interface MLItem {
+  id: string;
+  title: string;
+  price: number;
+  condition: string;
+  status: string;
+  permalink: string;
+  category_id: string;
+  thumbnail: string;
+  pictures?: { secure_url: string }[];
+  attributes?: { id: string; value_name: string }[];
+}
+
+// Map ML condition to 1-10 scale
+function mlConditionToNumber(condition: string): number {
+  return condition === "new" ? 10 : 6;
+}
+
+// Map ML category to app category
+const ML_CAT_MAP: Record<string, string> = {
+  MLA1430: "Fashion", MLA1763: "Fashion", // Ropa, Calzados
+  MLA1051: "Electronics", MLA1648: "Electronics", MLA1000: "Electronics", MLA1144: "Electronics",
+  MLA1574: "Home", MLA1499: "Home",
+  MLA1276: "Sports",
+  MLA1132: "Toys",
+  MLA3025: "Books",
+  MLA1500: "Tools",
+  MLA1743: "Auto", MLA1747: "Auto",
+};
+
+async function mlCategoryToApp(categoryId: string): Promise<string> {
+  // Try top-level mapping first
+  try {
+    const res = await fetch(`${ML_API}/categories/${categoryId}`);
+    if (res.ok) {
+      const data = await res.json();
+      const path = data.path_from_root || [];
+      if (path.length > 0) {
+        const topId = path[0].id;
+        if (ML_CAT_MAP[topId]) return ML_CAT_MAP[topId];
+      }
+    }
+  } catch { /* fallback */ }
+  return "Other";
+}
+
+export async function importFromML(userId: string): Promise<{ imported: number; skipped: number }> {
+  // Get user's ML ID
+  const meRes = await mlFetch("/users/me");
+  if (!meRes.ok) throw new Error("No se pudo obtener el usuario de ML");
+  const me = await meRes.json();
+  const sellerId = me.id;
+
+  // Get existing products that already have mlId to avoid duplicates
+  const existingSnap = await admin.firestore()
+    .collection("products")
+    .where("mlId", "!=", null)
+    .get();
+  const existingMlIds = new Set(existingSnap.docs.map((d) => d.data().mlId));
+
+  // Fetch all active/paused items
+  let offset = 0;
+  let imported = 0;
+  let skipped = 0;
+  const limit = 50;
+
+  while (true) {
+    const searchRes = await mlFetch(
+      `/users/${sellerId}/items/search?status=active,paused&offset=${offset}&limit=${limit}`
+    );
+    if (!searchRes.ok) break;
+    const searchData = await searchRes.json();
+    const itemIds: string[] = searchData.results || [];
+
+    if (itemIds.length === 0) break;
+
+    // Fetch item details in batches of 20 (ML multiget limit)
+    for (let i = 0; i < itemIds.length; i += 20) {
+      const batch = itemIds.slice(i, i + 20);
+      const multiRes = await mlFetch(`/items?ids=${batch.join(",")}`);
+      if (!multiRes.ok) continue;
+      const items: { code: number; body: MLItem }[] = await multiRes.json();
+
+      for (const { code, body: item } of items) {
+        if (code !== 200) continue;
+        if (existingMlIds.has(item.id)) {
+          skipped++;
+          continue;
+        }
+
+        const photoUrl = item.pictures?.[0]?.secure_url || item.thumbnail || "";
+        const category = await mlCategoryToApp(item.category_id);
+        const mlStatus = item.status === "active" ? "active" : "paused";
+
+        await admin.firestore().collection("products").add({
+          name: item.title,
+          category,
+          condition: mlConditionToNumber(item.condition),
+          costPrice: 0,
+          listPrice: item.price,
+          floorPrice: Math.round(item.price * 0.8),
+          notes: "",
+          photoUrl,
+          status: "available",
+          mlId: item.id,
+          mlLink: item.permalink,
+          mlStatus,
+          mlCategoryId: item.category_id,
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          createdBy: userId,
+          createdByEmail: "",
+        });
+
+        imported++;
+      }
+    }
+
+    offset += limit;
+    if (offset >= (searchData.paging?.total || 0)) break;
+  }
+
+  return { imported, skipped };
+}
+
 // --- Check auth status ---
 
 export async function isMLAuthorized(): Promise<boolean> {

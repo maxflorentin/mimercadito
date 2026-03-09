@@ -8,6 +8,7 @@ import {
   toggleListing,
   updateListing,
   isMLAuthorized,
+  importFromML,
 } from "./ml";
 import { syncProductSlide } from "./slides";
 
@@ -111,6 +112,17 @@ export const mlUpdate = onCall(
     if (!mlId) throw new HttpsError("invalid-argument", "mlId requerido");
     await updateListing(mlId, { price, description });
     return { success: true };
+  }
+);
+
+// --- ML Import ---
+
+export const mlImport = onCall(
+  { region: "us-central1", secrets: ["ML_CLIENT_ID", "ML_CLIENT_SECRET", "ML_REDIRECT_URI"], timeoutSeconds: 120 },
+  async (req) => {
+    assertAuthorized(req.auth);
+    const result = await importFromML(req.auth!.uid);
+    return result;
   }
 );
 

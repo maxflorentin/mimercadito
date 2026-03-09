@@ -40,3 +40,9 @@ export async function mlUpdateListing(
   const fn = httpsCallable(functions, 'mlUpdate');
   await fn({ mlId, ...updates });
 }
+
+export async function mlImportListings(): Promise<{ imported: number; skipped: number }> {
+  const fn = httpsCallable<void, { imported: number; skipped: number }>(functions, 'mlImport');
+  const result = await fn();
+  return result.data;
+}

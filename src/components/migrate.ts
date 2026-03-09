@@ -1,6 +1,7 @@
 import { collection, addDoc, Timestamp, getDocs, query, where } from 'firebase/firestore';
 import { db, auth } from '../lib/firebase';
 import { showToast } from '../lib/toast';
+import { mlImportListings } from '../lib/ml';
 
 interface SheetRow {
   date: string;
@@ -51,7 +52,14 @@ function mapStatus(s: string): 'available' | 'sold' | 'archived' {
 export function renderMigrate(container: HTMLElement) {
   container.innerHTML = `
     <div class="card">
-      <h2>Migrar productos desde Sheet</h2>
+      <h2>Importar desde Mercado Libre</h2>
+      <p class="hint" style="margin-bottom:16px">Importa tus publicaciones activas y pausadas de ML al inventario.</p>
+      <button class="btn btn-ml" id="ml-import-btn" style="width:100%">Importar de ML</button>
+      <div id="ml-import-log" style="margin-top:12px;font-size:13px;color:var(--color-text-secondary)"></div>
+    </div>
+
+    <div class="card" style="margin-top:16px">
+      <h2>Migrar desde Sheet</h2>
       <p class="hint" style="margin-bottom:16px">Ingresa la URL del GAS API y el token para importar los productos existentes.</p>
       <div class="form-group">
         <label class="label">GAS URL</label>
@@ -66,6 +74,28 @@ export function renderMigrate(container: HTMLElement) {
     </div>
   `;
 
+  // ML Import
+  document.getElementById('ml-import-btn')!.addEventListener('click', async () => {
+    const btn = document.getElementById('ml-import-btn') as HTMLButtonElement;
+    const log = document.getElementById('ml-import-log')!;
+    btn.disabled = true;
+    btn.textContent = 'Importando...';
+    log.textContent = 'Buscando publicaciones en ML...';
+    try {
+      const result = await mlImportListings();
+      log.textContent = `Importados: ${result.imported} | Ya existentes: ${result.skipped}`;
+      showToast(`${result.imported} productos importados de ML`);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Error';
+      log.textContent = `Error: ${msg}`;
+      showToast('Error al importar de ML', 'error');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Importar de ML';
+    }
+  });
+
+  // Sheet Migration
   document.getElementById('mig-start')!.addEventListener('click', async () => {
     const url = (document.getElementById('mig-url') as HTMLInputElement).value.trim();
     const token = (document.getElementById('mig-token') as HTMLInputElement).value.trim();
