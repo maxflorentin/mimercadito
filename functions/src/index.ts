@@ -1,5 +1,6 @@
 import * as admin from "firebase-admin";
 import { onCall, HttpsError, onRequest } from "firebase-functions/v2/https";
+import { onDocumentWritten } from "firebase-functions/v2/firestore";
 import {
   getAuthUrl,
   exchangeCode,
@@ -8,6 +9,7 @@ import {
   updateListing,
   isMLAuthorized,
 } from "./ml";
+import { syncProductSlide } from "./slides";
 
 admin.initializeApp();
 
@@ -109,5 +111,21 @@ export const mlUpdate = onCall(
     if (!mlId) throw new HttpsError("invalid-argument", "mlId requerido");
     await updateListing(mlId, { price, description });
     return { success: true };
+  }
+);
+
+// --- Google Slides Catalog Sync ---
+
+export const onProductWrite = onDocumentWritten(
+  { document: "products/{productId}", region: "us-central1", secrets: ["SLIDES_ID"] },
+  async (event) => {
+    const productId = event.params.productId;
+    const after = event.data?.after?.data() || null;
+
+    try {
+      await syncProductSlide(productId, after as Parameters<typeof syncProductSlide>[1]);
+    } catch (err) {
+      console.error(`Slides sync failed for ${productId}:`, err);
+    }
   }
 );

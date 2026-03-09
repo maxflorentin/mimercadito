@@ -20,6 +20,7 @@ export interface Product {
   mlAttributes?: Record<string, unknown>[];
   mlDescription?: string;
   mlReadyToPublish?: boolean;
+  slideObjectId?: string;
   createdAt: Timestamp;
   createdBy: string;
   createdByEmail: string;

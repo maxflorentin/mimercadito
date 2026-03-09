@@ -119,7 +119,7 @@ export function renderMigrate(container: HTMLElement) {
 
         const status = mapStatus(product.status);
 
-        await addDoc(collection(db, 'products'), {
+        const docData: Record<string, unknown> = {
           name: product.name,
           category: mapCategory(product.category),
           condition: Number(product.condition) || 7,
@@ -129,12 +129,15 @@ export function renderMigrate(container: HTMLElement) {
           notes: product.notes,
           photoUrl: product.photoUrl,
           status,
-          salePrice: status === 'sold' ? Number(product.salePrice) || 0 : undefined,
-          saleDate: status === 'sold' && product.saleDate ? Timestamp.fromDate(new Date(product.saleDate)) : undefined,
           createdAt: product.date ? Timestamp.fromDate(new Date(product.date)) : Timestamp.now(),
           createdBy: user.uid,
           createdByEmail: user.email || '',
-        });
+        };
+        if (status === 'sold') {
+          docData.salePrice = Number(product.salePrice) || 0;
+          if (product.saleDate) docData.saleDate = Timestamp.fromDate(new Date(product.saleDate));
+        }
+        await addDoc(collection(db, 'products'), docData);
 
         imported++;
         log.textContent = `Importados: ${imported} | Omitidos: ${skipped}`;
