@@ -54,7 +54,8 @@ function productCard(p: Product): string {
       </div>
       <div class="product-card-actions">
         ${p.status === 'available' ? `
-          ${!p.mlId ? `<button class="btn btn-sm btn-ml action-ml-publish">Publicar ML</button>` : ''}
+          ${!p.mlId && p.photoUrl ? `<button class="btn btn-sm btn-ml action-ml-publish">Publicar ML</button>` : ''}
+          ${!p.mlId && !p.photoUrl ? `<span class="hint">Agregá foto para publicar en ML</span>` : ''}
           ${p.mlId && p.mlStatus === 'active' ? `<button class="btn btn-sm btn-ml-outline action-ml-pause">Pausar ML</button>` : ''}
           ${p.mlId && p.mlStatus === 'paused' ? `<button class="btn btn-sm btn-ml action-ml-activate">Reactivar ML</button>` : ''}
           <button class="btn btn-sm btn-success action-sell">Vender</button>

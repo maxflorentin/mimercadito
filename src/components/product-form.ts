@@ -67,7 +67,7 @@ export async function renderProductForm(container: HTMLElement, editId?: string)
         </div>
         <div class="form-group">
           <label class="label">Foto</label>
-          <input class="input" type="file" id="f-photo" accept="image/*" capture="environment" />
+          <input class="input" type="file" id="f-photo" accept="image/*" />
           ${editing?.photoUrl ? `<img class="photo-preview" src="${esc(editing.photoUrl)}" />` : ''}
         </div>
         <button class="btn btn-primary" type="submit" style="width:100%">

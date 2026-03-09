@@ -57,7 +57,6 @@ async function getValidToken(): Promise<string> {
     return tokens.access_token;
   }
 
-  // Refresh
   const { clientId, clientSecret } = getMLSecrets();
   const res = await fetch(`${ML_API}/oauth/token`, {
     method: "POST",
@@ -82,7 +81,7 @@ async function getValidToken(): Promise<string> {
 
 async function mlFetch(path: string, options: RequestInit = {}): Promise<Response> {
   const token = await getValidToken();
-  const res = await fetch(`${ML_API}${path}`, {
+  return fetch(`${ML_API}${path}`, {
     ...options,
     headers: {
       Authorization: `Bearer ${token}`,
@@ -90,19 +89,39 @@ async function mlFetch(path: string, options: RequestInit = {}): Promise<Respons
       ...options.headers,
     },
   });
-  return res;
 }
 
 // --- Category prediction ---
 
 async function predictCategory(title: string): Promise<string> {
-  const FALLBACK = "MLA1953"; // Otros > Otros
   const res = await mlFetch(
     `/sites/MLA/category_predictor/predict?title=${encodeURIComponent(title)}`
   );
-  if (!res.ok) return FALLBACK;
+  if (!res.ok) throw new Error("No se pudo predecir la categoría de ML");
   const data = await res.json();
-  return data.id || data[0]?.id || FALLBACK;
+  const catId = data.id || data[0]?.id;
+  if (!catId) throw new Error("ML no devolvió categoría para este producto");
+
+  // Verify it's a leaf category
+  const catRes = await fetch(`${ML_API}/categories/${catId}`);
+  if (catRes.ok) {
+    const catData = await catRes.json();
+    const children = catData.children_categories || [];
+    if (children.length > 0) {
+      // Not a leaf — try first child recursively until leaf
+      let leafId = catId;
+      let leafChildren = children;
+      while (leafChildren.length > 0) {
+        leafId = leafChildren[0].id;
+        const subRes = await fetch(`${ML_API}/categories/${leafId}`);
+        if (!subRes.ok) break;
+        const subData = await subRes.json();
+        leafChildren = subData.children_categories || [];
+      }
+      return leafId;
+    }
+  }
+  return catId;
 }
 
 // --- Required attributes ---
@@ -166,6 +185,10 @@ export async function publishProduct(
   productId: string,
   product: ProductData
 ): Promise<{ mlId: string; mlLink: string }> {
+  if (!product.photoUrl) {
+    throw new Error("Se requiere una foto para publicar en ML");
+  }
+
   const categoryId = await predictCategory(product.name);
   const { resolved: reqAttrs, allRequired: allRequiredAttrs } = await getRequiredAttributes(categoryId);
 
@@ -174,24 +197,20 @@ export async function publishProduct(
     value_id: value,
   }));
 
-  // Fill any still-missing required attributes with generic text
+  // Fill missing required attrs with generic text
   const filledIds = new Set(attributes.map((a) => a.id as string));
   for (const attr of allRequiredAttrs) {
-    if (!filledIds.has(attr.id) && !SKIP_ATTR_IDS.has(attr.id) && !attr.tags?.allow_variations) {
-      if (attr.value_type === "string" || attr.value_type === "number_unit") {
-        attributes.push({ id: attr.id, value_name: "No especificado" });
-      }
+    if (filledIds.has(attr.id) || SKIP_ATTR_IDS.has(attr.id) || attr.tags?.allow_variations) continue;
+    if (attr.value_type === "string" || attr.value_type === "number_unit") {
+      attributes.push({ id: attr.id, value_name: "No especificado" });
     }
   }
 
-  // Add ITEM_CONDITION
+  // ITEM_CONDITION
   attributes.push({
     id: "ITEM_CONDITION",
-    value_id: product.condition >= 9 ? "2230284" : "2230581", // Nuevo : Usado
+    value_id: product.condition >= 9 ? "2230284" : "2230581",
   });
-
-  const hasPicture = !!product.photoUrl;
-  const listingType = hasPicture ? "gold_special" : "gold_pro";
 
   const body: Record<string, unknown> = {
     family_name: product.name,
@@ -200,9 +219,10 @@ export async function publishProduct(
     currency_id: "ARS",
     available_quantity: 1,
     buying_mode: "buy_it_now",
-    listing_type_id: listingType,
+    listing_type_id: "gold_special",
     condition: product.condition >= 9 ? "new" : "used",
     description: { plain_text: product.notes || product.name },
+    pictures: [{ source: product.photoUrl }],
     shipping: {
       mode: "me2",
       local_pick_up: true,
@@ -211,10 +231,6 @@ export async function publishProduct(
     attributes,
   };
 
-  if (hasPicture) {
-    body.pictures = [{ source: product.photoUrl }];
-  }
-
   const res = await mlFetch("/items", {
     method: "POST",
     body: JSON.stringify(body),
@@ -222,10 +238,15 @@ export async function publishProduct(
 
   const data = await res.json();
   if (!res.ok) {
-    throw new Error(`ML publish error: ${JSON.stringify(data)}`);
+    // Extract readable error
+    const causes = data.cause || [];
+    const errors = causes
+      .filter((c: { type: string }) => c.type === "error")
+      .map((c: { message: string }) => c.message);
+    const msg = errors.length > 0 ? errors.join(". ") : JSON.stringify(data);
+    throw new Error(`ML: ${msg}`);
   }
 
-  // Update Firestore
   await admin.firestore().doc(`products/${productId}`).update({
     mlId: data.id,
     mlLink: data.permalink,
@@ -249,7 +270,7 @@ export async function toggleListing(
   });
   if (!res.ok) {
     const data = await res.json();
-    throw new Error(`ML toggle error: ${JSON.stringify(data)}`);
+    throw new Error(`ML: ${data.message || JSON.stringify(data)}`);
   }
   await admin.firestore().doc(`products/${productId}`).update({
     mlStatus: action,
