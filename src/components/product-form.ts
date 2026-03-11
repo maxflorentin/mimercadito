@@ -23,10 +23,10 @@ export async function renderProductForm(container: HTMLElement, editId?: string)
         <div class="smart-input-section">
           <p class="label">Carga rapida</p>
           <div class="smart-input-row">
-            <input class="input" id="smart-input" placeholder='Ej: "zapatillas nike jordan nuevas 85k"' />
+            <input class="input" id="smart-input" placeholder="Nombre, estado y precio" />
             <button class="btn btn-primary" id="smart-parse">ML</button>
           </div>
-          <p class="hint">Detecta nombre, precio, condicion y categoria via ML</p>
+          <p class="hint">Ej: "zapatillas nike jordan nuevas 85k" — detecta nombre, precio, condicion y categoria</p>
         </div>
         <hr style="border:none;border-top:1px solid var(--color-border);margin:16px 0" />
       ` : ''}
