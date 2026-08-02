@@ -30,10 +30,10 @@ export async function renderProductForm(container: HTMLElement, editId?: string)
 
       ${!editing ? `
         <div class="ml-search-section">
-          <p class="label">Buscar en Mercado Libre</p>
+          <p class="label">Vender uno similar (ML)</p>
           <input class="input" id="ml-search-input" placeholder="ej: zapatillas nike jordan" autocomplete="off" />
           <div id="ml-results"></div>
-          <p class="hint">Tocá un resultado para completar el formulario y despues solo poné el precio</p>
+          <p class="hint">Tocá el que coincida: copia nombre, categoría, descripción y precio de ML — ajustá el precio y guardá</p>
         </div>
         <hr style="border:none;border-top:1px solid var(--color-border);margin:16px 0" />
       ` : ''}
@@ -109,8 +109,8 @@ export async function renderProductForm(container: HTMLElement, editId?: string)
       resultsBox.innerHTML = '<p class="hint">Sin resultados. Cargá los datos a mano abajo.</p>';
       return;
     }
-    resultsBox.innerHTML = candidates.map((c) => `
-      <div class="ml-result-item" data-id="${esc(c.id)}">
+    resultsBox.innerHTML = candidates.map((c, i) => `
+      <div class="ml-result-item" data-index="${i}">
         <img class="ml-result-thumb" src="${esc(c.thumbnail)}" alt="" loading="lazy" />
         <div class="ml-result-info">
           <div class="ml-result-title">${esc(c.title)}</div>
@@ -119,15 +119,34 @@ export async function renderProductForm(container: HTMLElement, editId?: string)
       </div>
     `).join('');
     resultsBox.querySelectorAll('.ml-result-item').forEach((el) => {
-      el.addEventListener('click', () => selectCandidate((el as HTMLElement).dataset.id!));
+      const index = Number((el as HTMLElement).dataset.index);
+      el.addEventListener('click', () => selectCandidate(candidates[index]));
     });
   }
 
-  async function selectCandidate(id: string) {
+  function renderMatchedChip() {
+    if (!resultsBox) return;
+    resultsBox.innerHTML = `
+      <div class="ml-matched">
+        <span>✓ Copiado de ML: ${esc(mlSourceTitle)}</span>
+        <button type="button" class="btn-link ml-matched-clear">Cambiar</button>
+      </div>
+    `;
+    resultsBox.querySelector('.ml-matched-clear')?.addEventListener('click', () => {
+      mlPhotoUrl = '';
+      mlSourceId = '';
+      mlSourceTitle = '';
+      renderReferencePhoto();
+      resultsBox!.innerHTML = '';
+      searchInput?.focus();
+    });
+  }
+
+  async function selectCandidate(candidate: MLCandidate) {
     if (!resultsBox) return;
     resultsBox.innerHTML = '<p class="hint">Cargando...</p>';
     try {
-      const prefill = await mlPrefill(id);
+      const prefill = await mlPrefill(candidate.id);
       (document.getElementById('f-name') as HTMLInputElement).value = prefill.name;
       (document.getElementById('f-category') as HTMLSelectElement).value = prefill.category;
       (document.getElementById('f-condition') as HTMLInputElement).value = String(prefill.condition);
@@ -136,12 +155,13 @@ export async function renderProductForm(container: HTMLElement, editId?: string)
       mlSourceId = prefill.mlSourceId;
       mlSourceTitle = prefill.mlSourceTitle;
       renderReferencePhoto();
-      resultsBox.innerHTML = '';
+      renderMatchedChip();
 
       const priceInput = document.getElementById('f-list') as HTMLInputElement;
+      priceInput.value = String(candidate.price);
       priceInput.focus();
       priceInput.select();
-      showToast('Datos completados — ingresá el precio');
+      showToast('Datos completados — ajustá el precio');
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Error al cargar la publicación';
       showToast(msg, 'error');
