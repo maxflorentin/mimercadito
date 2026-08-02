@@ -10,6 +10,7 @@ import {
   isMLAuthorized,
   importFromML,
   getListingDetail,
+  getCatalogProduct,
 } from "./ml";
 import { syncProductSlide } from "./slides";
 
@@ -133,10 +134,10 @@ export const mlPrefill = onCall(
   { region: "us-central1", secrets: ["ML_CLIENT_ID", "ML_CLIENT_SECRET", "ML_REDIRECT_URI"] },
   async (req) => {
     assertAuthorized(req.auth);
-    const { itemId } = req.data;
+    const { itemId, kind } = req.data;
     if (!itemId) throw new HttpsError("invalid-argument", "itemId requerido");
     try {
-      return await getListingDetail(itemId);
+      return kind === "catalog" ? await getCatalogProduct(itemId) : await getListingDetail(itemId);
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Error al cargar la publicación";
       throw new HttpsError("internal", msg);

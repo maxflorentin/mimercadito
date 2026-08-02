@@ -486,10 +486,13 @@ export async function isMLAuthorized(): Promise<boolean> {
   return snap.exists;
 }
 
-// --- Prefill from an ML listing link (quick inventory intake) ---
-// ML blocks /sites/{site}/search and /products/search for this app's OAuth
-// client (PolicyAgent 403 even authenticated) — only single-item lookup by
-// ID still works, so the intake flow works off a pasted listing link/ID.
+// --- Prefill from an ML catalog product (quick inventory intake) ---
+// ML blocks /sites/{site}/search, /products/search and GET /items/{id} for
+// another seller's listing — this app's OAuth grant only reaches the
+// authenticated seller's own items. GET /products/{catalog_product_id} is a
+// different, shared resource (the "sell one like this" mechanism ML's own
+// UI uses) and works for any authenticated app, so the intake flow reads
+// the catalog_product_id straight out of a pasted ML listing link.
 
 export interface MLPrefillResult {
   name: string;
@@ -500,6 +503,61 @@ export interface MLPrefillResult {
   mlPhotoUrl: string;
   mlSourceId: string;
   mlSourceTitle: string;
+}
+
+const DOMAIN_KEYWORD_CATEGORIES: [RegExp, string][] = [
+  [/CELLPHONE|SMARTPHONE|TABLET|COMPUTER|NOTEBOOK|LAPTOP|CONSOLE|VIDEO_GAME|HEADPHONE|CAMERA|\bTV\b|MONITOR|SPEAKER|ELECTRONIC/, "Electronics"],
+  [/SHOE|SNEAKER|CLOTHING|APPAREL|SHIRT|PANTS|DRESS|\bBAG\b|JEWEL|WATCH|FASHION/, "Fashion"],
+  [/FURNITURE|HOME|KITCHEN|APPLIANCE|LAMP|DECOR/, "Home"],
+  [/SPORT|FITNESS|\bBIKE\b|BICYCLE/, "Sports"],
+  [/\bTOY\b|DOLL|LEGO/, "Toys"],
+  [/\bBOOK\b/, "Books"],
+  [/\bTOOL\b/, "Tools"],
+  [/\bCAR\b|MOTORCYCLE|VEHICLE|AUTO_PART/, "Auto"],
+];
+
+function domainToAppCategory(domainId: string | undefined): string {
+  if (!domainId) return "Other";
+  const upper = domainId.toUpperCase();
+  for (const [re, cat] of DOMAIN_KEYWORD_CATEGORIES) {
+    if (re.test(upper)) return cat;
+  }
+  return "Other";
+}
+
+interface MLCatalogProduct {
+  id: string;
+  name: string;
+  domain_id?: string;
+  pictures?: { url: string }[];
+  main_features?: { text?: string }[];
+  short_description?: { content?: string };
+  buy_box_winner?: { price?: number; condition?: string } | null;
+}
+
+export async function getCatalogProduct(productId: string): Promise<MLPrefillResult> {
+  const res = await mlFetch(`/products/${productId}`);
+  if (!res.ok) {
+    throw new Error(`No se pudo obtener el producto de ML (${res.status})`);
+  }
+  const product: MLCatalogProduct = await res.json();
+
+  const notes = product.short_description?.content
+    || (product.main_features || []).map((f) => f.text).filter(Boolean).join("\n")
+    || "";
+
+  return {
+    name: product.name,
+    category: domainToAppCategory(product.domain_id),
+    notes,
+    condition: product.buy_box_winner?.condition
+      ? mlConditionToNumber(product.buy_box_winner.condition)
+      : 7,
+    price: product.buy_box_winner?.price || 0,
+    mlPhotoUrl: product.pictures?.[0]?.url || "",
+    mlSourceId: product.id,
+    mlSourceTitle: product.name,
+  };
 }
 
 export async function getListingDetail(itemId: string): Promise<MLPrefillResult> {

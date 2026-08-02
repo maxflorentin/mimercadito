@@ -58,8 +58,8 @@ export interface MLPrefillResult {
   mlSourceTitle: string;
 }
 
-export async function mlPrefill(itemId: string): Promise<MLPrefillResult> {
-  const fn = httpsCallable<{ itemId: string }, MLPrefillResult>(functions, 'mlPrefill');
-  const result = await fn({ itemId });
+export async function mlPrefill(itemId: string, kind: 'catalog' | 'item'): Promise<MLPrefillResult> {
+  const fn = httpsCallable<{ itemId: string; kind: string }, MLPrefillResult>(functions, 'mlPrefill');
+  const result = await fn({ itemId, kind });
   return result.data;
 }

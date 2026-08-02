@@ -4,9 +4,15 @@ import { showToast } from '../lib/toast';
 import { CATEGORIES } from '../lib/types';
 import { esc } from '../lib/sanitize';
 
-function extractMlItemId(text: string): string | null {
-  const match = text.match(/MLA-?(\d{6,})/i);
-  return match ? `MLA${match[1]}` : null;
+function extractMlRef(text: string): { id: string; kind: 'catalog' | 'item' } | null {
+  // Catalog product link (ML's own "sell one like this"): .../up/MLAU123... or .../p/MLA123...
+  const catalogMatch = text.match(/\/up\/(MLAU\d+)/i) || text.match(/\/p\/(MLA\d+)/i);
+  if (catalogMatch) return { id: catalogMatch[1].toUpperCase(), kind: 'catalog' };
+
+  const itemMatch = text.match(/MLA-?(\d{6,})/i);
+  if (itemMatch) return { id: `MLA${itemMatch[1]}`, kind: 'item' };
+
+  return null;
 }
 
 export function renderProductForm(container: HTMLElement) {
@@ -23,7 +29,7 @@ export function renderProductForm(container: HTMLElement) {
         <p class="label">Vender uno similar (ML)</p>
         <input class="input" id="ml-link-input" placeholder="Pegá el link del producto de ML" autocomplete="off" inputmode="url" />
         <div id="ml-results"></div>
-        <p class="hint">Buscalo en la app de ML, copiá el link de esa publicación y pegalo acá — copia nombre, categoría, descripción, foto y precio; vos solo ajustás el precio</p>
+        <p class="hint">Buscalo en la app de ML, copiá el link de esa publicación y pegalo acá — copia nombre, categoría, descripción y foto; vos ponés el precio</p>
       </div>
       <hr style="border:none;border-top:1px solid var(--color-border);margin:16px 0" />
 
@@ -112,11 +118,11 @@ export function renderProductForm(container: HTMLElement) {
     });
   }
 
-  async function loadFromItemId(itemId: string) {
+  async function loadFromRef(ref: { id: string; kind: 'catalog' | 'item' }) {
     if (!resultsBox) return;
     resultsBox.innerHTML = '<p class="hint">Cargando...</p>';
     try {
-      const prefill = await mlPrefill(itemId);
+      const prefill = await mlPrefill(ref.id, ref.kind);
       (document.getElementById('f-name') as HTMLInputElement).value = prefill.name;
       (document.getElementById('f-category') as HTMLSelectElement).value = prefill.category;
       (document.getElementById('f-condition') as HTMLInputElement).value = String(prefill.condition);
@@ -128,7 +134,7 @@ export function renderProductForm(container: HTMLElement) {
       renderMatchedChip();
 
       const priceInput = document.getElementById('f-list') as HTMLInputElement;
-      priceInput.value = String(prefill.price);
+      if (prefill.price) priceInput.value = String(prefill.price);
       priceInput.focus();
       priceInput.select();
       showToast('Datos completados — ajustá el precio');
@@ -144,13 +150,13 @@ export function renderProductForm(container: HTMLElement) {
     function tryLoad() {
       const text = linkInput!.value.trim();
       if (!text || text === lastProcessed) return;
-      const itemId = extractMlItemId(text);
-      if (!itemId) {
+      const ref = extractMlRef(text);
+      if (!ref) {
         resultsBox!.innerHTML = '<p class="hint">No encontré el link de ML ahí — pegá el link completo de la publicación</p>';
         return;
       }
       lastProcessed = text;
-      loadFromItemId(itemId);
+      loadFromRef(ref);
     }
 
     linkInput.addEventListener('input', () => {
