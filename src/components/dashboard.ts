@@ -30,7 +30,7 @@ interface MenuItem {
 }
 
 function primaryAction(p: Product): { label: string; action: string; variant: string } | null {
-  if (p.status === 'available') return { label: 'Vender', action: 'sell', variant: 'btn-success' };
+  if (p.status === 'available') return { label: 'Marcar como vendido', action: 'sell', variant: 'btn-success' };
   if (p.status === 'archived') return { label: 'Reactivar', action: 'reactivate', variant: 'btn-primary' };
   return null;
 }
