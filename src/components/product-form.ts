@@ -3,85 +3,72 @@ import { mlPrefill } from '../lib/ml';
 import { showToast } from '../lib/toast';
 import { CATEGORIES } from '../lib/types';
 import { esc } from '../lib/sanitize';
-import { doc, getDoc } from 'firebase/firestore';
-import { db } from '../lib/firebase';
-import type { Product } from '../lib/types';
 
 function extractMlItemId(text: string): string | null {
   const match = text.match(/MLA-?(\d{6,})/i);
   return match ? `MLA${match[1]}` : null;
 }
 
-export async function renderProductForm(container: HTMLElement, editId?: string) {
-  let editing: Product | null = null;
-
-  if (editId) {
-    const snap = await getDoc(doc(db, 'products', editId));
-    if (snap.exists()) editing = { id: snap.id, ...snap.data() } as Product;
-  }
-
-  // Populated when a search result is picked — saved alongside the product
+export function renderProductForm(container: HTMLElement) {
+  // Populated when an ML link is pasted — saved alongside the product
   let mlPhotoUrl = '';
   let mlSourceId = '';
   let mlSourceTitle = '';
 
   container.innerHTML = `
     <div class="card">
-      <h2>${editing ? 'Editar producto' : 'Agregar producto'}</h2>
+      <h2>Agregar producto</h2>
 
-      ${!editing ? `
-        <div class="ml-search-section">
-          <p class="label">Vender uno similar (ML)</p>
-          <input class="input" id="ml-link-input" placeholder="Pegá el link del producto de ML" autocomplete="off" inputmode="url" />
-          <div id="ml-results"></div>
-          <p class="hint">Buscalo en la app de ML, copiá el link de esa publicación y pegalo acá — copia nombre, categoría, descripción, foto y precio; vos solo ajustás el precio</p>
-        </div>
-        <hr style="border:none;border-top:1px solid var(--color-border);margin:16px 0" />
-      ` : ''}
+      <div class="ml-search-section">
+        <p class="label">Vender uno similar (ML)</p>
+        <input class="input" id="ml-link-input" placeholder="Pegá el link del producto de ML" autocomplete="off" inputmode="url" />
+        <div id="ml-results"></div>
+        <p class="hint">Buscalo en la app de ML, copiá el link de esa publicación y pegalo acá — copia nombre, categoría, descripción, foto y precio; vos solo ajustás el precio</p>
+      </div>
+      <hr style="border:none;border-top:1px solid var(--color-border);margin:16px 0" />
 
       <form id="product-form">
         <div class="form-group">
           <label class="label">Nombre</label>
-          <input class="input" id="f-name" required value="${editing ? esc(editing.name) : ''}" />
+          <input class="input" id="f-name" required value="" />
         </div>
         <div class="form-group">
           <label class="label">Categoria</label>
           <select class="input" id="f-category">
-            ${CATEGORIES.map((c) => `<option value="${c}" ${editing?.category === c ? 'selected' : ''}>${c}</option>`).join('')}
+            ${CATEGORIES.map((c) => `<option value="${c}">${c}</option>`).join('')}
           </select>
         </div>
         <div class="form-row">
           <div class="form-group form-half">
             <label class="label">Condicion (1-10)</label>
-            <input class="input" type="number" id="f-condition" min="1" max="10" value="${editing?.condition ?? 7}" />
+            <input class="input" type="number" id="f-condition" min="1" max="10" value="7" />
           </div>
           <div class="form-group form-half">
             <label class="label">Precio costo</label>
-            <input class="input" type="number" id="f-cost" value="${editing?.costPrice ?? 0}" />
+            <input class="input" type="number" id="f-cost" value="0" />
           </div>
         </div>
         <div class="form-row">
           <div class="form-group form-half">
             <label class="label">Precio lista</label>
-            <input class="input" type="number" id="f-list" required value="${editing?.listPrice ?? ''}" />
+            <input class="input" type="number" id="f-list" required value="" />
           </div>
           <div class="form-group form-half">
             <label class="label">Precio piso</label>
-            <input class="input" type="number" id="f-floor" value="${editing?.floorPrice ?? ''}" />
+            <input class="input" type="number" id="f-floor" value="" />
           </div>
         </div>
         <div class="form-group">
           <label class="label">Notas</label>
-          <textarea class="input" id="f-notes" rows="2">${editing ? esc(editing.notes) : ''}</textarea>
+          <textarea class="input" id="f-notes" rows="2"></textarea>
         </div>
         <div class="form-group">
           <label class="label">Foto</label>
           <div id="ml-reference-box"></div>
           <input class="input" type="file" id="f-photo" accept="image/*" />
-          ${editing?.photoUrl ? `<img class="photo-preview" src="${esc(editing.photoUrl)}" />` : ''}
         </div>
         <button class="btn btn-primary" type="submit" style="width:100%">
-          ${editing ? 'Guardar cambios' : 'Agregar producto'}
+          Agregar producto
         </button>
       </form>
     </div>
@@ -202,44 +189,34 @@ export async function renderProductForm(container: HTMLElement, editId?: string)
         return;
       }
 
-      if (editing) {
-        const data: Partial<Product> = { name, category, condition, listPrice, floorPrice, costPrice, notes };
-        if (photoFile) {
-          data.photoUrl = await uploadProductPhoto(photoFile, editing.id);
-        }
-        await updateProduct(editing.id, data);
-        showToast('Producto actualizado');
-        window.location.hash = '#productos';
-      } else {
-        const productData = {
-          name,
-          category,
-          condition,
-          listPrice,
-          floorPrice,
-          costPrice,
-          notes,
-          photoUrl: '',
-          status: 'available' as const,
-          ...(linkInput?.value ? { parsedFrom: linkInput.value } : {}),
-          ...(mlPhotoUrl ? { mlPhotoUrl } : {}),
-          ...(mlSourceId ? { mlSourceId } : {}),
-          ...(mlSourceTitle ? { mlSourceTitle } : {}),
-        };
-        const id = await addProduct(productData);
-        if (photoFile) {
-          const photoUrl = await uploadProductPhoto(photoFile, id);
-          await updateProduct(id, { photoUrl });
-        }
-        showToast('Producto agregado');
-        window.location.hash = '#productos';
+      const productData = {
+        name,
+        category,
+        condition,
+        listPrice,
+        floorPrice,
+        costPrice,
+        notes,
+        photoUrl: '',
+        status: 'available' as const,
+        ...(linkInput?.value ? { parsedFrom: linkInput.value } : {}),
+        ...(mlPhotoUrl ? { mlPhotoUrl } : {}),
+        ...(mlSourceId ? { mlSourceId } : {}),
+        ...(mlSourceTitle ? { mlSourceTitle } : {}),
+      };
+      const id = await addProduct(productData);
+      if (photoFile) {
+        const photoUrl = await uploadProductPhoto(photoFile, id);
+        await updateProduct(id, { photoUrl });
       }
+      showToast('Producto agregado');
+      window.location.hash = '#productos';
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Error al guardar';
       showToast(msg, 'error');
     } finally {
       submitBtn.disabled = false;
-      submitBtn.textContent = editing ? 'Guardar cambios' : 'Agregar producto';
+      submitBtn.textContent = 'Agregar producto';
     }
   });
 }

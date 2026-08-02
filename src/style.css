@@ -168,12 +168,6 @@ body {
   color: #fff;
 }
 
-.btn-ml-outline {
-  background: transparent;
-  border: 1.5px solid var(--color-warning);
-  color: var(--color-warning);
-}
-
 /* === Forms === */
 .form-group {
   margin-bottom: 16px;
@@ -348,8 +342,59 @@ select.input {
 
 .product-card-top {
   display: flex;
+  align-items: flex-start;
   gap: 12px;
   margin-bottom: 10px;
+}
+
+.card-menu {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.card-menu-trigger {
+  background: none;
+  border: none;
+  padding: 4px 8px;
+  font-size: 18px;
+  line-height: 1;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+
+.card-menu-dropdown {
+  position: absolute;
+  right: 0;
+  top: 100%;
+  z-index: 10;
+  min-width: 160px;
+  background: var(--color-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+
+.card-menu-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 10px 14px;
+  background: none;
+  border: none;
+  font-family: var(--font);
+  font-size: 14px;
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.card-menu-item:hover,
+.card-menu-item:active {
+  background: var(--color-bg);
+}
+
+.hidden {
+  display: none;
 }
 
 .product-thumb {

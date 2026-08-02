@@ -28,7 +28,6 @@ function renderApp() {
   const hash = window.location.hash || '#productos';
   const isAgregar = hash === '#agregar';
   const isMigrar = hash === '#migrar';
-  const editMatch = hash.match(/^#editar\/(.+)$/);
 
   app.innerHTML = `
     <header class="app-header">
@@ -36,7 +35,7 @@ function renderApp() {
       <button class="btn btn-secondary btn-sm" id="logout-btn">Salir</button>
     </header>
     <nav class="tab-nav">
-      <a class="tab ${!isAgregar && !isMigrar && !editMatch ? 'active' : ''}" href="#productos">Productos</a>
+      <a class="tab ${!isAgregar && !isMigrar ? 'active' : ''}" href="#productos">Productos</a>
       <a class="tab ${isAgregar ? 'active' : ''}" href="#agregar">Agregar</a>
       <a class="tab ${isMigrar ? 'active' : ''}" href="#migrar">Migrar</a>
     </nav>
@@ -51,8 +50,6 @@ function renderApp() {
     renderProductForm(view);
   } else if (isMigrar) {
     renderMigrate(view);
-  } else if (editMatch) {
-    renderProductForm(view, editMatch[1]);
   } else {
     cleanup = renderDashboard(view) || null;
   }

@@ -1,7 +1,8 @@
-import { subscribeProducts, markSold, archiveProduct, reactivateProduct } from '../lib/products';
+import { subscribeProducts, markSold, archiveProduct, reactivateProduct, updateProduct, uploadProductPhoto } from '../lib/products';
 import { mlPublish, mlToggle, mlGetAuthUrl, mlCheckAuth } from '../lib/ml';
 import { showToast } from '../lib/toast';
 import { esc } from '../lib/sanitize';
+import { CATEGORIES } from '../lib/types';
 import type { Product } from '../lib/types';
 
 function formatPrice(n: number): string {
@@ -23,6 +24,27 @@ function conditionStars(n: number): string {
   return `<span class="condition">${n}/10</span>`;
 }
 
+interface MenuItem {
+  label: string;
+  action: string;
+}
+
+function primaryAction(p: Product): { label: string; action: string; variant: string } | null {
+  if (p.status === 'available') return { label: 'Vender', action: 'sell', variant: 'btn-success' };
+  if (p.status === 'archived') return { label: 'Reactivar', action: 'reactivate', variant: 'btn-primary' };
+  return null;
+}
+
+function menuItems(p: Product): MenuItem[] {
+  if (p.status !== 'available') return [];
+  const items: MenuItem[] = [{ label: 'Editar', action: 'edit' }];
+  if (!p.mlId && p.photoUrl) items.push({ label: 'Publicar en ML', action: 'ml-publish' });
+  if (p.mlId && p.mlStatus === 'active') items.push({ label: 'Pausar en ML', action: 'ml-pause' });
+  if (p.mlId && p.mlStatus === 'paused') items.push({ label: 'Reactivar en ML', action: 'ml-activate' });
+  items.push({ label: 'Archivar', action: 'archive' });
+  return items;
+}
+
 function productCard(p: Product): string {
   const thumbSrc = p.photoUrl || p.mlPhotoUrl;
   const photo = thumbSrc
@@ -32,6 +54,9 @@ function productCard(p: Product): string {
   const margin = p.salePrice
     ? `<span class="stat-green">+${formatPrice(p.salePrice - p.costPrice)}</span>`
     : '';
+
+  const primary = primaryAction(p);
+  const menu = menuItems(p);
 
   return `
     <div class="product-card" data-id="${esc(p.id)}">
@@ -43,6 +68,14 @@ function productCard(p: Product): string {
             ${categoryBadge(p.category)} ${conditionStars(p.condition)}
           </div>
         </div>
+        ${menu.length ? `
+          <div class="card-menu">
+            <button type="button" class="card-menu-trigger" aria-label="Más acciones">⋮</button>
+            <div class="card-menu-dropdown hidden">
+              ${menu.map((m) => `<button type="button" class="card-menu-item" data-action="${m.action}">${esc(m.label)}</button>`).join('')}
+            </div>
+          </div>
+        ` : ''}
       </div>
       <div class="product-card-prices">
         <span class="product-price">${formatPrice(p.listPrice)}</span>
@@ -54,23 +87,12 @@ function productCard(p: Product): string {
         ${p.mlLink ? `<a href="${esc(p.mlLink)}" target="_blank" class="ml-link">Ver en ML</a>` : ''}
         ${p.mlLink ? `<a href="https://wa.me/1124005532?text=${encodeURIComponent(p.name + ' - ' + formatPrice(p.listPrice) + '\n' + p.mlLink)}" target="_blank" class="ml-link">Compartir</a>` : ''}
       </div>
-      <div class="product-card-actions">
-        ${p.status === 'available' ? `
-          ${!p.mlId && p.photoUrl ? `<button class="btn btn-sm btn-ml action-ml-publish">Publicar ML</button>` : ''}
-          ${!p.mlId && !p.photoUrl ? `<span class="hint">Agregá foto para publicar en ML</span>` : ''}
-          ${p.mlId && p.mlStatus === 'active' ? `<button class="btn btn-sm btn-ml-outline action-ml-pause">Pausar ML</button>` : ''}
-          ${p.mlId && p.mlStatus === 'paused' ? `<button class="btn btn-sm btn-ml action-ml-activate">Reactivar ML</button>` : ''}
-          <button class="btn btn-sm btn-success action-sell">Vender</button>
-          <button class="btn btn-sm btn-secondary action-archive">Archivar</button>
-          <button class="btn btn-sm btn-secondary action-edit">Editar</button>
-        ` : ''}
-        ${p.status === 'archived' ? `
-          <button class="btn btn-sm btn-primary action-reactivate">Reactivar</button>
-        ` : ''}
-        ${p.status === 'sold' ? `
-          <span class="sale-info">Vendido: ${formatPrice(p.salePrice || 0)}</span>
-        ` : ''}
-      </div>
+      ${primary ? `
+        <div class="product-card-actions">
+          <button class="btn btn-sm ${primary.variant} action-primary" data-action="${primary.action}" style="width:100%">${primary.label}</button>
+        </div>
+      ` : ''}
+      ${p.status === 'sold' ? `<div class="product-card-actions"><span class="sale-info">Vendido: ${formatPrice(p.salePrice || 0)}</span></div>` : ''}
     </div>
   `;
 }
@@ -139,6 +161,116 @@ function showSellModal(product: Product) {
   });
 }
 
+function showEditModal(product: Product) {
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.innerHTML = `
+    <div class="modal">
+      <div class="modal-header">
+        <h3>Editar producto</h3>
+        <button class="modal-close">&times;</button>
+      </div>
+      <form id="edit-form">
+        <div class="form-group">
+          <label class="label">Nombre</label>
+          <input class="input" id="e-name" required value="${esc(product.name)}" />
+        </div>
+        <div class="form-group">
+          <label class="label">Categoria</label>
+          <select class="input" id="e-category">
+            ${CATEGORIES.map((c) => `<option value="${c}" ${product.category === c ? 'selected' : ''}>${c}</option>`).join('')}
+          </select>
+        </div>
+        <div class="form-row">
+          <div class="form-group form-half">
+            <label class="label">Condicion (1-10)</label>
+            <input class="input" type="number" id="e-condition" min="1" max="10" value="${product.condition}" />
+          </div>
+          <div class="form-group form-half">
+            <label class="label">Precio costo</label>
+            <input class="input" type="number" id="e-cost" value="${product.costPrice}" />
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group form-half">
+            <label class="label">Precio lista</label>
+            <input class="input" type="number" id="e-list" required value="${product.listPrice}" />
+          </div>
+          <div class="form-group form-half">
+            <label class="label">Precio piso</label>
+            <input class="input" type="number" id="e-floor" value="${product.floorPrice ?? ''}" />
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="label">Notas</label>
+          <textarea class="input" id="e-notes" rows="2">${esc(product.notes || '')}</textarea>
+        </div>
+        <div class="form-group">
+          <label class="label">Foto</label>
+          ${!product.photoUrl && product.mlPhotoUrl ? `
+            <div class="ml-reference">
+              <img class="ml-reference-photo" src="${esc(product.mlPhotoUrl)}" alt="" />
+              <span class="hint">Foto de referencia de ML — subí la tuya</span>
+            </div>
+          ` : ''}
+          <input class="input" type="file" id="e-photo" accept="image/*" />
+          ${product.photoUrl ? `<img class="photo-preview" src="${esc(product.photoUrl)}" />` : ''}
+        </div>
+        <button class="btn btn-primary" type="submit" style="width:100%">Guardar cambios</button>
+      </form>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+
+  overlay.querySelector('.modal-close')!.addEventListener('click', () => overlay.remove());
+  overlay.addEventListener('click', (e) => {
+    if (e.target === overlay) overlay.remove();
+  });
+
+  overlay.querySelector('#edit-form')!.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const submitBtn = (e.target as HTMLFormElement).querySelector('button[type=submit]') as HTMLButtonElement;
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Guardando...';
+
+    try {
+      const name = (document.getElementById('e-name') as HTMLInputElement).value.trim();
+      const category = (document.getElementById('e-category') as HTMLSelectElement).value;
+      const condition = Number((document.getElementById('e-condition') as HTMLInputElement).value);
+      const listPrice = Number((document.getElementById('e-list') as HTMLInputElement).value);
+      const floorPrice = Number((document.getElementById('e-floor') as HTMLInputElement).value) || Math.round(listPrice * 0.8);
+      const costPrice = Number((document.getElementById('e-cost') as HTMLInputElement).value) || 0;
+      const notes = (document.getElementById('e-notes') as HTMLTextAreaElement).value.trim();
+      const photoFile = (document.getElementById('e-photo') as HTMLInputElement).files?.[0];
+
+      if (!name || !listPrice) {
+        showToast('Nombre y precio son requeridos', 'error');
+        return;
+      }
+
+      const data: Partial<Product> = { name, category, condition, listPrice, floorPrice, costPrice, notes };
+      if (photoFile) {
+        data.photoUrl = await uploadProductPhoto(photoFile, product.id);
+      }
+      await updateProduct(product.id, data);
+      showToast('Producto actualizado');
+      overlay.remove();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Error al guardar';
+      showToast(msg, 'error');
+    } finally {
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Guardar cambios';
+    }
+  });
+}
+
+function closeAllMenus(except?: HTMLElement) {
+  document.querySelectorAll('.card-menu-dropdown').forEach((el) => {
+    if (el !== except) el.classList.add('hidden');
+  });
+}
+
 export function renderDashboard(container: HTMLElement): () => void {
   let currentTab: 'available' | 'sold' | 'archived' = 'available';
   let allProducts: Product[] = [];
@@ -182,66 +314,93 @@ export function renderDashboard(container: HTMLElement): () => void {
       render();
     });
 
-    // Card actions
+    // Menu toggles
+    container.querySelectorAll('.card-menu-trigger').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const dropdown = (btn as HTMLElement).nextElementSibling as HTMLElement;
+        const willOpen = dropdown.classList.contains('hidden');
+        closeAllMenus();
+        if (willOpen) dropdown.classList.remove('hidden');
+      });
+    });
+
+    // Card actions (menu items + primary button), dispatched by data-action
     container.querySelectorAll('.product-card').forEach((card) => {
       const id = (card as HTMLElement).dataset.id!;
       const product = allProducts.find((p) => p.id === id);
       if (!product) return;
 
-      card.querySelector('.action-ml-publish')?.addEventListener('click', async (e) => {
-        const btn = e.target as HTMLButtonElement;
-        btn.disabled = true;
-        btn.textContent = 'Publicando...';
-        try {
-          const result = await mlPublish(id);
-          showToast(`Publicado: ${result.mlId}`);
-        } catch (err) {
-          const msg = err instanceof Error ? err.message : 'Error ML';
-          showToast(msg, 'error');
-        }
-      });
-      card.querySelector('.action-ml-pause')?.addEventListener('click', async (e) => {
-        const btn = e.target as HTMLButtonElement;
-        btn.disabled = true;
-        try {
-          await mlToggle(id, product.mlId!, 'paused');
-          showToast('Publicacion pausada');
-        } catch {
-          showToast('Error al pausar', 'error');
-        }
-      });
-      card.querySelector('.action-ml-activate')?.addEventListener('click', async (e) => {
-        const btn = e.target as HTMLButtonElement;
-        btn.disabled = true;
-        try {
-          await mlToggle(id, product.mlId!, 'active');
-          showToast('Publicacion reactivada');
-        } catch {
-          showToast('Error al reactivar', 'error');
-        }
-      });
-      card.querySelector('.action-sell')?.addEventListener('click', () => showSellModal(product));
-      card.querySelector('.action-archive')?.addEventListener('click', async () => {
-        try {
-          await archiveProduct(id);
-          showToast('Producto archivado');
-        } catch {
-          showToast('Error', 'error');
-        }
-      });
-      card.querySelector('.action-reactivate')?.addEventListener('click', async () => {
-        try {
-          await reactivateProduct(id);
-          showToast('Producto reactivado');
-        } catch {
-          showToast('Error', 'error');
-        }
-      });
-      card.querySelector('.action-edit')?.addEventListener('click', () => {
-        window.location.hash = `#editar/${id}`;
+      card.querySelectorAll<HTMLButtonElement>('[data-action]').forEach((btn) => {
+        btn.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          closeAllMenus();
+          const action = btn.dataset.action;
+
+          if (action === 'edit') return showEditModal(product);
+          if (action === 'sell') return showSellModal(product);
+
+          if (action === 'archive') {
+            try {
+              await archiveProduct(id);
+              showToast('Producto archivado');
+            } catch {
+              showToast('Error', 'error');
+            }
+            return;
+          }
+
+          if (action === 'reactivate') {
+            try {
+              await reactivateProduct(id);
+              showToast('Producto reactivado');
+            } catch {
+              showToast('Error', 'error');
+            }
+            return;
+          }
+
+          if (action === 'ml-publish') {
+            btn.disabled = true;
+            btn.textContent = 'Publicando...';
+            try {
+              const result = await mlPublish(id);
+              showToast(`Publicado: ${result.mlId}`);
+            } catch (err) {
+              const msg = err instanceof Error ? err.message : 'Error ML';
+              showToast(msg, 'error');
+            }
+            return;
+          }
+
+          if (action === 'ml-pause') {
+            btn.disabled = true;
+            try {
+              await mlToggle(id, product.mlId!, 'paused');
+              showToast('Publicacion pausada');
+            } catch {
+              showToast('Error al pausar', 'error');
+            }
+            return;
+          }
+
+          if (action === 'ml-activate') {
+            btn.disabled = true;
+            try {
+              await mlToggle(id, product.mlId!, 'active');
+              showToast('Publicacion reactivada');
+            } catch {
+              showToast('Error al reactivar', 'error');
+            }
+            return;
+          }
+        });
       });
     });
   }
+
+  const closeMenusOnOutsideClick = () => closeAllMenus();
+  document.addEventListener('click', closeMenusOnOutsideClick);
 
   function subscribe() {
     if (unsub) unsub();
@@ -281,5 +440,6 @@ export function renderDashboard(container: HTMLElement): () => void {
 
   return () => {
     if (unsub) unsub();
+    document.removeEventListener('click', closeMenusOnOutsideClick);
   };
 }
