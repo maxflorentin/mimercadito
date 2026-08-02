@@ -141,6 +141,7 @@ export const aiParseProduct = onCall(
       return await parseProductWithAI({ text, photoBase64, photoMimeType });
     } catch (err) {
       const raw = err instanceof Error ? err.message : "Error de IA";
+      console.error("aiParseProduct error:", raw);
       const msg = /429|quota|rate.?limit/i.test(raw)
         ? "Límite de la IA gratuita alcanzado, esperá un minuto y probá de nuevo"
         : raw;
