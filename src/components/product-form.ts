@@ -61,6 +61,7 @@ export function renderProductForm(container: HTMLElement) {
             <input class="input" type="number" id="f-floor" value="" />
           </div>
         </div>
+        <p class="hint" style="margin-top:-8px">Revisá el precio en ML antes de cargar — la IA no lo sabe</p>
         <div class="form-group">
           <label class="label">Notas</label>
           <textarea class="input" id="f-notes" rows="2"></textarea>

@@ -140,7 +140,10 @@ export const aiParseProduct = onCall(
     try {
       return await parseProductWithAI({ text, photoBase64, photoMimeType });
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "Error de IA";
+      const raw = err instanceof Error ? err.message : "Error de IA";
+      const msg = /429|quota|rate.?limit/i.test(raw)
+        ? "Límite de la IA gratuita alcanzado, esperá un minuto y probá de nuevo"
+        : raw;
       throw new HttpsError("internal", msg);
     }
   }
