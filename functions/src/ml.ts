@@ -497,9 +497,9 @@ export interface MLCandidate {
 }
 
 export async function searchListings(query: string): Promise<MLCandidate[]> {
-  // Public site search — no auth needed
-  const res = await fetch(
-    `${ML_API}/sites/MLA/search?q=${encodeURIComponent(query)}&limit=5`
+  // ML now requires an authenticated request for site search
+  const res = await mlFetch(
+    `/sites/MLA/search?q=${encodeURIComponent(query)}&limit=5`
   );
   if (!res.ok) throw new Error(`ML search error (${res.status})`);
   const data = await res.json();
@@ -525,8 +525,8 @@ export interface MLPrefillResult {
 
 export async function getListingDetail(itemId: string): Promise<MLPrefillResult> {
   const [itemRes, descRes] = await Promise.all([
-    fetch(`${ML_API}/items/${itemId}`),
-    fetch(`${ML_API}/items/${itemId}/description`),
+    mlFetch(`/items/${itemId}`),
+    mlFetch(`/items/${itemId}/description`),
   ]);
   if (!itemRes.ok) {
     throw new Error(`No se pudo obtener la publicación de ML (${itemRes.status})`);

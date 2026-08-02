@@ -131,23 +131,33 @@ export const mlImport = onCall(
 // --- Search & Prefill (quick inventory intake) ---
 
 export const mlSearch = onCall(
-  { region: "us-central1" },
+  { region: "us-central1", secrets: ["ML_CLIENT_ID", "ML_CLIENT_SECRET", "ML_REDIRECT_URI"] },
   async (req) => {
     assertAuthorized(req.auth);
     const query = (req.data?.query || "").trim();
     if (!query) throw new HttpsError("invalid-argument", "query requerido");
-    const results = await searchListings(query);
-    return { results };
+    try {
+      const results = await searchListings(query);
+      return { results };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Error al buscar en ML";
+      throw new HttpsError("internal", msg);
+    }
   }
 );
 
 export const mlPrefill = onCall(
-  { region: "us-central1" },
+  { region: "us-central1", secrets: ["ML_CLIENT_ID", "ML_CLIENT_SECRET", "ML_REDIRECT_URI"] },
   async (req) => {
     assertAuthorized(req.auth);
     const { itemId } = req.data;
     if (!itemId) throw new HttpsError("invalid-argument", "itemId requerido");
-    return getListingDetail(itemId);
+    try {
+      return await getListingDetail(itemId);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Error al cargar la publicación";
+      throw new HttpsError("internal", msg);
+    }
   }
 );
 

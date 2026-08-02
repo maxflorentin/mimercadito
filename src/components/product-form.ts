@@ -182,8 +182,9 @@ export async function renderProductForm(container: HTMLElement, editId?: string)
       try {
         const results = await mlSearch(q);
         renderResults(results);
-      } catch {
-        resultsBox!.innerHTML = '<p class="hint">Error al buscar</p>';
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Error al buscar';
+        resultsBox!.innerHTML = `<p class="hint">${esc(msg)}</p>`;
       }
     }
 
