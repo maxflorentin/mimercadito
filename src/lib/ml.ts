@@ -46,20 +46,3 @@ export async function mlImportListings(): Promise<{ imported: number; skipped: n
   const result = await fn();
   return result.data;
 }
-
-export interface MLPrefillResult {
-  name: string;
-  category: string;
-  notes: string;
-  condition: number;
-  price: number;
-  mlPhotoUrl: string;
-  mlSourceId: string;
-  mlSourceTitle: string;
-}
-
-export async function mlPrefill(itemId: string, kind: 'catalog' | 'item'): Promise<MLPrefillResult> {
-  const fn = httpsCallable<{ itemId: string; kind: string }, MLPrefillResult>(functions, 'mlPrefill');
-  const result = await fn({ itemId, kind });
-  return result.data;
-}

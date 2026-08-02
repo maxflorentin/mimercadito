@@ -226,48 +226,9 @@ select.input {
   margin-top: 8px;
 }
 
-/* === ML Link Prefill === */
-.ml-search-section {
+/* === AI Intake === */
+.ai-intake-section {
   margin-bottom: 8px;
-}
-
-.ml-reference {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 8px;
-}
-
-.ml-reference-photo {
-  width: 48px;
-  height: 48px;
-  object-fit: cover;
-  border-radius: var(--radius-sm);
-  flex-shrink: 0;
-}
-
-.ml-matched {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  margin-top: 8px;
-  padding: 8px 10px;
-  border-radius: var(--radius-sm);
-  background: var(--color-bg);
-  font-size: 13px;
-}
-
-.btn-link {
-  background: none;
-  border: none;
-  padding: 0;
-  color: var(--color-primary);
-  font-family: var(--font);
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-  flex-shrink: 0;
 }
 
 /* === Stats === */

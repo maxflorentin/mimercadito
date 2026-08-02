@@ -20,14 +20,10 @@ export interface Product {
   mlAttributes?: Record<string, unknown>[];
   mlDescription?: string;
   mlReadyToPublish?: boolean;
-  mlPhotoUrl?: string;
-  mlSourceId?: string;
-  mlSourceTitle?: string;
   slideObjectId?: string;
   createdAt: Timestamp;
   createdBy: string;
   createdByEmail: string;
-  parsedFrom?: string;
 }
 
 export const CATEGORIES = [

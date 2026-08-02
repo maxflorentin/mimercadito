@@ -9,10 +9,9 @@ import {
   updateListing,
   isMLAuthorized,
   importFromML,
-  getListingDetail,
-  getCatalogProduct,
 } from "./ml";
 import { syncProductSlide } from "./slides";
+import { parseProductWithAI } from "./ai";
 
 admin.initializeApp();
 
@@ -128,18 +127,20 @@ export const mlImport = onCall(
   }
 );
 
-// --- Prefill from an ML listing link ---
+// --- AI product parsing (quick inventory intake) ---
 
-export const mlPrefill = onCall(
-  { region: "us-central1", secrets: ["ML_CLIENT_ID", "ML_CLIENT_SECRET", "ML_REDIRECT_URI"] },
+export const aiParseProduct = onCall(
+  { region: "us-central1", secrets: ["GEMINI_API_KEY"], timeoutSeconds: 30 },
   async (req) => {
     assertAuthorized(req.auth);
-    const { itemId, kind } = req.data;
-    if (!itemId) throw new HttpsError("invalid-argument", "itemId requerido");
+    const { text, photoBase64, photoMimeType } = req.data || {};
+    if (!text && !photoBase64) {
+      throw new HttpsError("invalid-argument", "Se requiere una descripción o una foto");
+    }
     try {
-      return kind === "catalog" ? await getCatalogProduct(itemId) : await getListingDetail(itemId);
+      return await parseProductWithAI({ text, photoBase64, photoMimeType });
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "Error al cargar la publicación";
+      const msg = err instanceof Error ? err.message : "Error de IA";
       throw new HttpsError("internal", msg);
     }
   }

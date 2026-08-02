@@ -46,9 +46,8 @@ function menuItems(p: Product): MenuItem[] {
 }
 
 function productCard(p: Product): string {
-  const thumbSrc = p.photoUrl || p.mlPhotoUrl;
-  const photo = thumbSrc
-    ? `<img class="product-thumb" src="${esc(thumbSrc)}" alt="" loading="lazy" />`
+  const photo = p.photoUrl
+    ? `<img class="product-thumb" src="${esc(p.photoUrl)}" alt="" loading="lazy" />`
     : '<div class="product-thumb product-thumb-empty">📦</div>';
 
   const margin = p.salePrice
@@ -207,12 +206,6 @@ function showEditModal(product: Product) {
         </div>
         <div class="form-group">
           <label class="label">Foto</label>
-          ${!product.photoUrl && product.mlPhotoUrl ? `
-            <div class="ml-reference">
-              <img class="ml-reference-photo" src="${esc(product.mlPhotoUrl)}" alt="" />
-              <span class="hint">Foto de referencia de ML — subí la tuya</span>
-            </div>
-          ` : ''}
           <input class="input" type="file" id="e-photo" accept="image/*" />
           ${product.photoUrl ? `<img class="photo-preview" src="${esc(product.photoUrl)}" />` : ''}
         </div>
