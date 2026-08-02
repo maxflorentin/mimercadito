@@ -385,7 +385,7 @@ const ML_CAT_MAP: Record<string, string> = {
   MLA1743: "Auto", MLA1747: "Auto",
 };
 
-async function mlCategoryToApp(categoryId: string): Promise<string> {
+export async function mlCategoryToApp(categoryId: string): Promise<string> {
   // Try top-level mapping first
   try {
     const res = await fetch(`${ML_API}/categories/${categoryId}`);
@@ -484,4 +484,66 @@ export async function importFromML(userId: string): Promise<{ imported: number; 
 export async function isMLAuthorized(): Promise<boolean> {
   const snap = await admin.firestore().doc("config/ml_tokens").get();
   return snap.exists;
+}
+
+// --- Search & Prefill (quick inventory intake) ---
+
+export interface MLCandidate {
+  id: string;
+  title: string;
+  price: number;
+  thumbnail: string;
+  condition: string;
+}
+
+export async function searchListings(query: string): Promise<MLCandidate[]> {
+  // Public site search — no auth needed
+  const res = await fetch(
+    `${ML_API}/sites/MLA/search?q=${encodeURIComponent(query)}&limit=5`
+  );
+  if (!res.ok) throw new Error(`ML search error (${res.status})`);
+  const data = await res.json();
+  const results: MLItem[] = data.results || [];
+  return results.map((item) => ({
+    id: item.id,
+    title: item.title,
+    price: item.price,
+    thumbnail: item.thumbnail,
+    condition: item.condition,
+  }));
+}
+
+export interface MLPrefillResult {
+  name: string;
+  category: string;
+  notes: string;
+  condition: number;
+  mlPhotoUrl: string;
+  mlSourceId: string;
+  mlSourceTitle: string;
+}
+
+export async function getListingDetail(itemId: string): Promise<MLPrefillResult> {
+  const [itemRes, descRes] = await Promise.all([
+    fetch(`${ML_API}/items/${itemId}`),
+    fetch(`${ML_API}/items/${itemId}/description`),
+  ]);
+  if (!itemRes.ok) {
+    throw new Error(`No se pudo obtener la publicación de ML (${itemRes.status})`);
+  }
+  const item: MLItem = await itemRes.json();
+  const descData = descRes.ok ? await descRes.json() : null;
+  const notes: string = descData?.plain_text || "";
+  const category = await mlCategoryToApp(item.category_id);
+  const mlPhotoUrl = item.pictures?.[0]?.secure_url || item.thumbnail || "";
+
+  return {
+    name: item.title,
+    category,
+    notes,
+    condition: mlConditionToNumber(item.condition),
+    mlPhotoUrl,
+    mlSourceId: item.id,
+    mlSourceTitle: item.title,
+  };
 }

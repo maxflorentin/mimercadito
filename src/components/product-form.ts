@@ -1,11 +1,15 @@
 import { addProduct, uploadProductPhoto, updateProduct } from '../lib/products';
-import { parseProductInput } from '../lib/gemini';
+import { mlSearch, mlPrefill, type MLCandidate } from '../lib/ml';
 import { showToast } from '../lib/toast';
 import { CATEGORIES } from '../lib/types';
 import { esc } from '../lib/sanitize';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import type { Product } from '../lib/types';
+
+function formatPrice(n: number): string {
+  return '$' + n.toLocaleString('es-AR');
+}
 
 export async function renderProductForm(container: HTMLElement, editId?: string) {
   let editing: Product | null = null;
@@ -15,18 +19,21 @@ export async function renderProductForm(container: HTMLElement, editId?: string)
     if (snap.exists()) editing = { id: snap.id, ...snap.data() } as Product;
   }
 
+  // Populated when a search result is picked — saved alongside the product
+  let mlPhotoUrl = '';
+  let mlSourceId = '';
+  let mlSourceTitle = '';
+
   container.innerHTML = `
     <div class="card">
       <h2>${editing ? 'Editar producto' : 'Agregar producto'}</h2>
 
       ${!editing ? `
-        <div class="smart-input-section">
-          <p class="label">Carga rapida</p>
-          <div class="smart-input-row">
-            <input class="input" id="smart-input" placeholder="Nombre, estado y precio" />
-            <button class="btn btn-primary" id="smart-parse">ML</button>
-          </div>
-          <p class="hint">Ej: "zapatillas nike jordan nuevas 85k" — detecta nombre, precio, condicion y categoria</p>
+        <div class="ml-search-section">
+          <p class="label">Buscar en Mercado Libre</p>
+          <input class="input" id="ml-search-input" placeholder="ej: zapatillas nike jordan" autocomplete="off" />
+          <div id="ml-results"></div>
+          <p class="hint">Tocá un resultado para completar el formulario y despues solo poné el precio</p>
         </div>
         <hr style="border:none;border-top:1px solid var(--color-border);margin:16px 0" />
       ` : ''}
@@ -68,6 +75,7 @@ export async function renderProductForm(container: HTMLElement, editId?: string)
         </div>
         <div class="form-group">
           <label class="label">Foto</label>
+          <div id="ml-reference-box"></div>
           <input class="input" type="file" id="f-photo" accept="image/*" />
           ${editing?.photoUrl ? `<img class="photo-preview" src="${esc(editing.photoUrl)}" />` : ''}
         </div>
@@ -78,41 +86,99 @@ export async function renderProductForm(container: HTMLElement, editId?: string)
     </div>
   `;
 
-  // Smart input
-  const smartBtn = document.getElementById('smart-parse');
-  const smartInput = document.getElementById('smart-input') as HTMLInputElement | null;
-  if (smartBtn && smartInput) {
-    async function doParse() {
-      const text = smartInput!.value.trim();
-      if (!text) return;
-      smartBtn!.textContent = '...';
-      (smartBtn as HTMLButtonElement).disabled = true;
+  function renderReferencePhoto() {
+    const box = document.getElementById('ml-reference-box');
+    if (!box) return;
+    box.innerHTML = mlPhotoUrl
+      ? `
+        <div class="ml-reference">
+          <img class="ml-reference-photo" src="${esc(mlPhotoUrl)}" alt="" />
+          <span class="hint">Foto de referencia de ML — subí la tuya cuando puedas</span>
+        </div>
+      `
+      : '';
+  }
+
+  // ML search
+  const searchInput = document.getElementById('ml-search-input') as HTMLInputElement | null;
+  const resultsBox = document.getElementById('ml-results');
+
+  function renderResults(candidates: MLCandidate[]) {
+    if (!resultsBox) return;
+    if (!candidates.length) {
+      resultsBox.innerHTML = '<p class="hint">Sin resultados. Cargá los datos a mano abajo.</p>';
+      return;
+    }
+    resultsBox.innerHTML = candidates.map((c) => `
+      <div class="ml-result-item" data-id="${esc(c.id)}">
+        <img class="ml-result-thumb" src="${esc(c.thumbnail)}" alt="" loading="lazy" />
+        <div class="ml-result-info">
+          <div class="ml-result-title">${esc(c.title)}</div>
+          <div class="ml-result-price">${formatPrice(c.price)}</div>
+        </div>
+      </div>
+    `).join('');
+    resultsBox.querySelectorAll('.ml-result-item').forEach((el) => {
+      el.addEventListener('click', () => selectCandidate((el as HTMLElement).dataset.id!));
+    });
+  }
+
+  async function selectCandidate(id: string) {
+    if (!resultsBox) return;
+    resultsBox.innerHTML = '<p class="hint">Cargando...</p>';
+    try {
+      const prefill = await mlPrefill(id);
+      (document.getElementById('f-name') as HTMLInputElement).value = prefill.name;
+      (document.getElementById('f-category') as HTMLSelectElement).value = prefill.category;
+      (document.getElementById('f-condition') as HTMLInputElement).value = String(prefill.condition);
+      (document.getElementById('f-notes') as HTMLTextAreaElement).value = prefill.notes;
+      mlPhotoUrl = prefill.mlPhotoUrl;
+      mlSourceId = prefill.mlSourceId;
+      mlSourceTitle = prefill.mlSourceTitle;
+      renderReferencePhoto();
+      resultsBox.innerHTML = '';
+
+      const priceInput = document.getElementById('f-list') as HTMLInputElement;
+      priceInput.focus();
+      priceInput.select();
+      showToast('Datos completados — ingresá el precio');
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Error al cargar la publicación';
+      showToast(msg, 'error');
+      resultsBox.innerHTML = '';
+    }
+  }
+
+  if (searchInput && resultsBox) {
+    let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+
+    async function runSearch() {
+      const q = searchInput!.value.trim();
+      if (q.length < 3) {
+        resultsBox!.innerHTML = '';
+        return;
+      }
+      resultsBox!.innerHTML = '<p class="hint">Buscando...</p>';
       try {
-        const parsed = await parseProductInput(text);
-        if (parsed) {
-          (document.getElementById('f-name') as HTMLInputElement).value = parsed.name;
-          (document.getElementById('f-category') as HTMLSelectElement).value = parsed.category;
-          (document.getElementById('f-condition') as HTMLInputElement).value = String(parsed.condition);
-          if (parsed.listPrice) (document.getElementById('f-list') as HTMLInputElement).value = String(parsed.listPrice);
-          if (parsed.floorPrice) (document.getElementById('f-floor') as HTMLInputElement).value = String(parsed.floorPrice);
-          if (parsed.costPrice) (document.getElementById('f-cost') as HTMLInputElement).value = String(parsed.costPrice);
-          (document.getElementById('f-notes') as HTMLInputElement).value = parsed.notes;
-          showToast('Datos completados');
-        } else {
-          showToast('No se pudo parsear', 'error');
-        }
+        const results = await mlSearch(q);
+        renderResults(results);
       } catch {
-        showToast('Error al parsear', 'error');
-      } finally {
-        smartBtn!.textContent = 'ML';
-        (smartBtn as HTMLButtonElement).disabled = false;
+        resultsBox!.innerHTML = '<p class="hint">Error al buscar</p>';
       }
     }
 
-    smartBtn.addEventListener('click', doParse);
-    smartInput.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') { e.preventDefault(); doParse(); }
+    searchInput.addEventListener('input', () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(runSearch, 500);
     });
+    searchInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        if (debounceTimer) clearTimeout(debounceTimer);
+        runSearch();
+      }
+    });
+    searchInput.focus();
   }
 
   // Form submit
@@ -156,7 +222,10 @@ export async function renderProductForm(container: HTMLElement, editId?: string)
           notes,
           photoUrl: '',
           status: 'available' as const,
-          parsedFrom: smartInput?.value || undefined,
+          ...(searchInput?.value ? { parsedFrom: searchInput.value } : {}),
+          ...(mlPhotoUrl ? { mlPhotoUrl } : {}),
+          ...(mlSourceId ? { mlSourceId } : {}),
+          ...(mlSourceTitle ? { mlSourceTitle } : {}),
         };
         const id = await addProduct(productData);
         if (photoFile) {

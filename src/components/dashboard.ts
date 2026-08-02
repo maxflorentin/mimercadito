@@ -24,8 +24,9 @@ function conditionStars(n: number): string {
 }
 
 function productCard(p: Product): string {
-  const photo = p.photoUrl
-    ? `<img class="product-thumb" src="${esc(p.photoUrl)}" alt="" loading="lazy" />`
+  const thumbSrc = p.photoUrl || p.mlPhotoUrl;
+  const photo = thumbSrc
+    ? `<img class="product-thumb" src="${esc(thumbSrc)}" alt="" loading="lazy" />`
     : '<div class="product-thumb product-thumb-empty">📦</div>';
 
   const margin = p.salePrice

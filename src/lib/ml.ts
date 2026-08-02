@@ -46,3 +46,33 @@ export async function mlImportListings(): Promise<{ imported: number; skipped: n
   const result = await fn();
   return result.data;
 }
+
+export interface MLCandidate {
+  id: string;
+  title: string;
+  price: number;
+  thumbnail: string;
+  condition: string;
+}
+
+export async function mlSearch(query: string): Promise<MLCandidate[]> {
+  const fn = httpsCallable<{ query: string }, { results: MLCandidate[] }>(functions, 'mlSearch');
+  const result = await fn({ query });
+  return result.data.results;
+}
+
+export interface MLPrefillResult {
+  name: string;
+  category: string;
+  notes: string;
+  condition: number;
+  mlPhotoUrl: string;
+  mlSourceId: string;
+  mlSourceTitle: string;
+}
+
+export async function mlPrefill(itemId: string): Promise<MLPrefillResult> {
+  const fn = httpsCallable<{ itemId: string }, MLPrefillResult>(functions, 'mlPrefill');
+  const result = await fn({ itemId });
+  return result.data;
+}

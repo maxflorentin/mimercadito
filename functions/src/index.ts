@@ -9,6 +9,8 @@ import {
   updateListing,
   isMLAuthorized,
   importFromML,
+  searchListings,
+  getListingDetail,
 } from "./ml";
 import { syncProductSlide } from "./slides";
 
@@ -123,6 +125,29 @@ export const mlImport = onCall(
     assertAuthorized(req.auth);
     const result = await importFromML(req.auth!.uid);
     return result;
+  }
+);
+
+// --- Search & Prefill (quick inventory intake) ---
+
+export const mlSearch = onCall(
+  { region: "us-central1" },
+  async (req) => {
+    assertAuthorized(req.auth);
+    const query = (req.data?.query || "").trim();
+    if (!query) throw new HttpsError("invalid-argument", "query requerido");
+    const results = await searchListings(query);
+    return { results };
+  }
+);
+
+export const mlPrefill = onCall(
+  { region: "us-central1" },
+  async (req) => {
+    assertAuthorized(req.auth);
+    const { itemId } = req.data;
+    if (!itemId) throw new HttpsError("invalid-argument", "itemId requerido");
+    return getListingDetail(itemId);
   }
 );
 
