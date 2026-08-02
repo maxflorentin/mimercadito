@@ -232,52 +232,9 @@ select.input {
   margin-top: 8px;
 }
 
-/* === ML Search === */
+/* === ML Link Prefill === */
 .ml-search-section {
   margin-bottom: 8px;
-}
-
-.ml-result-item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 8px;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  margin-top: 8px;
-  cursor: pointer;
-  transition: border-color 0.2s, background 0.2s;
-}
-
-.ml-result-item:hover,
-.ml-result-item:active {
-  border-color: var(--color-primary);
-  background: var(--color-bg);
-}
-
-.ml-result-thumb {
-  width: 40px;
-  height: 40px;
-  object-fit: cover;
-  border-radius: var(--radius-sm);
-  flex-shrink: 0;
-}
-
-.ml-result-info {
-  min-width: 0;
-}
-
-.ml-result-title {
-  font-size: 13px;
-  font-weight: 500;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.ml-result-price {
-  font-size: 13px;
-  color: var(--color-text-secondary);
 }
 
 .ml-reference {

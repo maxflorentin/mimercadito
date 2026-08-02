@@ -9,7 +9,6 @@ import {
   updateListing,
   isMLAuthorized,
   importFromML,
-  searchListings,
   getListingDetail,
 } from "./ml";
 import { syncProductSlide } from "./slides";
@@ -128,23 +127,7 @@ export const mlImport = onCall(
   }
 );
 
-// --- Search & Prefill (quick inventory intake) ---
-
-export const mlSearch = onCall(
-  { region: "us-central1", secrets: ["ML_CLIENT_ID", "ML_CLIENT_SECRET", "ML_REDIRECT_URI"] },
-  async (req) => {
-    assertAuthorized(req.auth);
-    const query = (req.data?.query || "").trim();
-    if (!query) throw new HttpsError("invalid-argument", "query requerido");
-    try {
-      const results = await searchListings(query);
-      return { results };
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : "Error al buscar en ML";
-      throw new HttpsError("internal", msg);
-    }
-  }
-);
+// --- Prefill from an ML listing link ---
 
 export const mlPrefill = onCall(
   { region: "us-central1", secrets: ["ML_CLIENT_ID", "ML_CLIENT_SECRET", "ML_REDIRECT_URI"] },

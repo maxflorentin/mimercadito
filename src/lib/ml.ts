@@ -47,25 +47,12 @@ export async function mlImportListings(): Promise<{ imported: number; skipped: n
   return result.data;
 }
 
-export interface MLCandidate {
-  id: string;
-  title: string;
-  price: number;
-  thumbnail: string;
-  condition: string;
-}
-
-export async function mlSearch(query: string): Promise<MLCandidate[]> {
-  const fn = httpsCallable<{ query: string }, { results: MLCandidate[] }>(functions, 'mlSearch');
-  const result = await fn({ query });
-  return result.data.results;
-}
-
 export interface MLPrefillResult {
   name: string;
   category: string;
   notes: string;
   condition: number;
+  price: number;
   mlPhotoUrl: string;
   mlSourceId: string;
   mlSourceTitle: string;

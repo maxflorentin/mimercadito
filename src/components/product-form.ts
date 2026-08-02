@@ -1,5 +1,5 @@
 import { addProduct, uploadProductPhoto, updateProduct } from '../lib/products';
-import { mlSearch, mlPrefill, type MLCandidate } from '../lib/ml';
+import { mlPrefill } from '../lib/ml';
 import { showToast } from '../lib/toast';
 import { CATEGORIES } from '../lib/types';
 import { esc } from '../lib/sanitize';
@@ -7,8 +7,9 @@ import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import type { Product } from '../lib/types';
 
-function formatPrice(n: number): string {
-  return '$' + n.toLocaleString('es-AR');
+function extractMlItemId(text: string): string | null {
+  const match = text.match(/MLA-?(\d{6,})/i);
+  return match ? `MLA${match[1]}` : null;
 }
 
 export async function renderProductForm(container: HTMLElement, editId?: string) {
@@ -31,9 +32,9 @@ export async function renderProductForm(container: HTMLElement, editId?: string)
       ${!editing ? `
         <div class="ml-search-section">
           <p class="label">Vender uno similar (ML)</p>
-          <input class="input" id="ml-search-input" placeholder="ej: zapatillas nike jordan" autocomplete="off" />
+          <input class="input" id="ml-link-input" placeholder="Pegá el link del producto de ML" autocomplete="off" inputmode="url" />
           <div id="ml-results"></div>
-          <p class="hint">Tocá el que coincida: copia nombre, categoría, descripción y precio de ML — ajustá el precio y guardá</p>
+          <p class="hint">Buscalo en la app de ML, copiá el link de esa publicación y pegalo acá — copia nombre, categoría, descripción, foto y precio; vos solo ajustás el precio</p>
         </div>
         <hr style="border:none;border-top:1px solid var(--color-border);margin:16px 0" />
       ` : ''}
@@ -99,30 +100,10 @@ export async function renderProductForm(container: HTMLElement, editId?: string)
       : '';
   }
 
-  // ML search
-  const searchInput = document.getElementById('ml-search-input') as HTMLInputElement | null;
+  // ML link prefill
+  const linkInput = document.getElementById('ml-link-input') as HTMLInputElement | null;
   const resultsBox = document.getElementById('ml-results');
-
-  function renderResults(candidates: MLCandidate[]) {
-    if (!resultsBox) return;
-    if (!candidates.length) {
-      resultsBox.innerHTML = '<p class="hint">Sin resultados. Cargá los datos a mano abajo.</p>';
-      return;
-    }
-    resultsBox.innerHTML = candidates.map((c, i) => `
-      <div class="ml-result-item" data-index="${i}">
-        <img class="ml-result-thumb" src="${esc(c.thumbnail)}" alt="" loading="lazy" />
-        <div class="ml-result-info">
-          <div class="ml-result-title">${esc(c.title)}</div>
-          <div class="ml-result-price">${formatPrice(c.price)}</div>
-        </div>
-      </div>
-    `).join('');
-    resultsBox.querySelectorAll('.ml-result-item').forEach((el) => {
-      const index = Number((el as HTMLElement).dataset.index);
-      el.addEventListener('click', () => selectCandidate(candidates[index]));
-    });
-  }
+  let lastProcessed = '';
 
   function renderMatchedChip() {
     if (!resultsBox) return;
@@ -136,17 +117,19 @@ export async function renderProductForm(container: HTMLElement, editId?: string)
       mlPhotoUrl = '';
       mlSourceId = '';
       mlSourceTitle = '';
+      lastProcessed = '';
       renderReferencePhoto();
       resultsBox!.innerHTML = '';
-      searchInput?.focus();
+      if (linkInput) linkInput.value = '';
+      linkInput?.focus();
     });
   }
 
-  async function selectCandidate(candidate: MLCandidate) {
+  async function loadFromItemId(itemId: string) {
     if (!resultsBox) return;
     resultsBox.innerHTML = '<p class="hint">Cargando...</p>';
     try {
-      const prefill = await mlPrefill(candidate.id);
+      const prefill = await mlPrefill(itemId);
       (document.getElementById('f-name') as HTMLInputElement).value = prefill.name;
       (document.getElementById('f-category') as HTMLSelectElement).value = prefill.category;
       (document.getElementById('f-condition') as HTMLInputElement).value = String(prefill.condition);
@@ -158,48 +141,43 @@ export async function renderProductForm(container: HTMLElement, editId?: string)
       renderMatchedChip();
 
       const priceInput = document.getElementById('f-list') as HTMLInputElement;
-      priceInput.value = String(candidate.price);
+      priceInput.value = String(prefill.price);
       priceInput.focus();
       priceInput.select();
       showToast('Datos completados — ajustá el precio');
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Error al cargar la publicación';
-      showToast(msg, 'error');
-      resultsBox.innerHTML = '';
+      resultsBox.innerHTML = `<p class="hint">${esc(msg)}</p>`;
     }
   }
 
-  if (searchInput && resultsBox) {
+  if (linkInput && resultsBox) {
     let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 
-    async function runSearch() {
-      const q = searchInput!.value.trim();
-      if (q.length < 3) {
-        resultsBox!.innerHTML = '';
+    function tryLoad() {
+      const text = linkInput!.value.trim();
+      if (!text || text === lastProcessed) return;
+      const itemId = extractMlItemId(text);
+      if (!itemId) {
+        resultsBox!.innerHTML = '<p class="hint">No encontré el link de ML ahí — pegá el link completo de la publicación</p>';
         return;
       }
-      resultsBox!.innerHTML = '<p class="hint">Buscando...</p>';
-      try {
-        const results = await mlSearch(q);
-        renderResults(results);
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : 'Error al buscar';
-        resultsBox!.innerHTML = `<p class="hint">${esc(msg)}</p>`;
-      }
+      lastProcessed = text;
+      loadFromItemId(itemId);
     }
 
-    searchInput.addEventListener('input', () => {
+    linkInput.addEventListener('input', () => {
       if (debounceTimer) clearTimeout(debounceTimer);
-      debounceTimer = setTimeout(runSearch, 500);
+      debounceTimer = setTimeout(tryLoad, 300);
     });
-    searchInput.addEventListener('keydown', (e) => {
+    linkInput.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') {
         e.preventDefault();
         if (debounceTimer) clearTimeout(debounceTimer);
-        runSearch();
+        tryLoad();
       }
     });
-    searchInput.focus();
+    linkInput.focus();
   }
 
   // Form submit
@@ -243,7 +221,7 @@ export async function renderProductForm(container: HTMLElement, editId?: string)
           notes,
           photoUrl: '',
           status: 'available' as const,
-          ...(searchInput?.value ? { parsedFrom: searchInput.value } : {}),
+          ...(linkInput?.value ? { parsedFrom: linkInput.value } : {}),
           ...(mlPhotoUrl ? { mlPhotoUrl } : {}),
           ...(mlSourceId ? { mlSourceId } : {}),
           ...(mlSourceTitle ? { mlSourceTitle } : {}),

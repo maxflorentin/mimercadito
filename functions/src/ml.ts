@@ -486,38 +486,17 @@ export async function isMLAuthorized(): Promise<boolean> {
   return snap.exists;
 }
 
-// --- Search & Prefill (quick inventory intake) ---
-
-export interface MLCandidate {
-  id: string;
-  title: string;
-  price: number;
-  thumbnail: string;
-  condition: string;
-}
-
-export async function searchListings(query: string): Promise<MLCandidate[]> {
-  // ML now requires an authenticated request for site search
-  const res = await mlFetch(
-    `/sites/MLA/search?q=${encodeURIComponent(query)}&limit=5`
-  );
-  if (!res.ok) throw new Error(`ML search error (${res.status})`);
-  const data = await res.json();
-  const results: MLItem[] = data.results || [];
-  return results.map((item) => ({
-    id: item.id,
-    title: item.title,
-    price: item.price,
-    thumbnail: item.thumbnail,
-    condition: item.condition,
-  }));
-}
+// --- Prefill from an ML listing link (quick inventory intake) ---
+// ML blocks /sites/{site}/search and /products/search for this app's OAuth
+// client (PolicyAgent 403 even authenticated) — only single-item lookup by
+// ID still works, so the intake flow works off a pasted listing link/ID.
 
 export interface MLPrefillResult {
   name: string;
   category: string;
   notes: string;
   condition: number;
+  price: number;
   mlPhotoUrl: string;
   mlSourceId: string;
   mlSourceTitle: string;
@@ -542,6 +521,7 @@ export async function getListingDetail(itemId: string): Promise<MLPrefillResult>
     category,
     notes,
     condition: mlConditionToNumber(item.condition),
+    price: item.price,
     mlPhotoUrl,
     mlSourceId: item.id,
     mlSourceTitle: item.title,
